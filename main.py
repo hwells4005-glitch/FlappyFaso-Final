@@ -1,8 +1,11 @@
 import random
 import math
+import struct
+import wave
+import os
 from kivy.config import Config
 
-# Optimisation graphique
+# Optimisation
 Config.set('graphics', 'resizable', '0')
 Config.set('kivy', 'exit_on_escape', '1')
 
@@ -14,6 +17,27 @@ from kivy.lang import Builder
 from kivy.properties import NumericProperty, ListProperty, BooleanProperty, ObjectProperty
 from kivy.metrics import dp
 from kivy.graphics.texture import Texture
+from kivy.core.audio import SoundLoader
+
+# --- GÉNÉRATEUR DE SON (TECHNIQUE LÉGÈRE) ---
+def create_beep():
+    # On fabrique un petit fichier WAV 'score.wav' s'il n'existe pas
+    if not os.path.exists('score.wav'):
+        noise_output = wave.open('score.wav', 'w')
+        noise_output.setparams((1, 2, 44100, 0, 'NONE', 'not compressed'))
+        
+        # Un son court et aigu (type "Coin" de Mario)
+        duration = 0.1  # secondes
+        volume = 0.5
+        values = []
+        for i in range(0, int(44100 * duration)):
+            value = math.sin(2 * math.pi * 880 * (i / 44100.0)) * (volume * 32767)
+            packed_value = struct.pack('h', int(value))
+            values.append(packed_value)
+            
+        value_str = b''.join(values)
+        noise_output.writeframes(value_str)
+        noise_output.close()
 
 kv = '''
 #:import dp kivy.metrics.dp
@@ -182,13 +206,22 @@ class FlappyGame(FloatLayout):
     bg_texture = ObjectProperty(None)
     pipe_tex_red = ObjectProperty(None)
     pipe_tex_green = ObjectProperty(None)
+    sound = ObjectProperty(None)
     
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        # 1. TEXTURES
         self.generate_flag_bg()
         self.pipe_tex_red = self.gen_pipe_tex((239, 43, 45))
         self.pipe_tex_green = self.gen_pipe_tex((0, 158, 73))
         
+        # 2. AUDIO (Création + Chargement)
+        create_beep()
+        try:
+            self.sound = SoundLoader.load('score.wav')
+        except:
+            print("Erreur chargement audio")
+
         Clock.schedule_interval(self.update, 1.0/60.0)
         self.spawn_timer = 0
 
@@ -256,7 +289,14 @@ class FlappyGame(FloatLayout):
             if p.right < self.bird.x and not p.scored:
                 self.score += 1
                 p.scored = True
-                # PLUS DE SON = PLUS DE CRASH !
+                # --- LECTURE DU SON (SAFE) ---
+                if self.sound:
+                    try:
+                        if self.sound.state == 'play':
+                            self.sound.stop()
+                        self.sound.volume = 1.0
+                        self.sound.play()
+                    except: pass
             
             if p.right < 0:
                 self.pipe_layer.remove_widget(p)
@@ -276,4 +316,4 @@ class FlappyApp(App):
 
 if __name__ == '__main__':
     FlappyApp().run()
-    
+        
