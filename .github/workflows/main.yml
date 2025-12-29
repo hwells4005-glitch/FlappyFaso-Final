@@ -8,12 +8,15 @@ jobs:
       # 1. On récupère le code
       - uses: actions/checkout@v4
 
-      # 2. On répare les permissions
-      - name: Fix Permissions
+      # 2. LE GRAND NETTOYAGE (C'est ça qui va te sauver !)
+      # On supprime les anciens dossiers pour forcer une reconstruction propre
+      - name: Force Clean & Fix Permissions
         run: |
+          sudo rm -rf .buildozer
+          sudo rm -rf bin
           sudo chmod 777 -R .
 
-      # 3. ON LANCE L'USINE (Code Corrigé : Plus de bégaiement !)
+      # 3. On lance la compilation (Version Docker Directe)
       - name: Build APK
         run: |
           docker run --rm -v ${{ github.workspace }}:/home/user/hostcwd kivy/buildozer android debug
