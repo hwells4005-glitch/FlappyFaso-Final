@@ -1,12 +1,16 @@
 [app]
-title = Flappy Faso V20
+title = Flappy Faso
 package.name = flappyfaso
 package.domain = org.faso
 source.dir = .
-source.include_exts = py,png,jpg,kv,atlas
+source.include_exts = py,png,jpg,kv,atlas,wav
 
-version = 2.0
-# LA LIGNE SÉCURISÉE (Vérifie qu'elle est unique !)
+version = 2.1
+
+# ⚠️ REGARDE : J'AI AJOUTÉ L'ICÔNE ICI
+icon.filename = icon.png
+
+# Requirements LÉGERS (Surtout pas de ffpyplayer !)
 requirements = python3,kivy==2.2.0,android
 
 orientation = portrait
