@@ -1,0 +1,26 @@
+name: Build Android
+on: [push]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      # 1. Récupération du code
+      - uses: actions/checkout@v4
+
+      # 2. LA CORRECTION MAGIQUE (Force les permissions)
+      - name: Fix Permissions
+        run: sudo chmod 777 -R .
+
+      # 3. Compilation via Docker (Méthode Directe)
+      - name: Build APK
+        run: |
+          docker run --rm -v ${{ github.workspace }}:/home/user/hostcwd kivy/buildozer buildozer android debug
+
+      # 4. Envoi de l'APK
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: FlappyFaso-APK
+          path: bin/*.apk
+          
