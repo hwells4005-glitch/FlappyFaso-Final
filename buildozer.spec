@@ -12,18 +12,19 @@ orientation = portrait
 fullscreen = 0
 android.permissions = INTERNET
 
-# --- LA LIGNE MAGIQUE QUI MANQUAIT ---
+# On accepte la licence automatiquement
 android.accept_sdk_license = True
-# -------------------------------------
 
-# On fixe des versions stables pour éviter les bugs des versions trop récentes
+# Versions Android
 android.api = 33
 android.minapi = 21
 android.archs = arm64-v8a, armeabi-v7a
 android.allow_backup = True
 
-# Important pour GitHub
-p4a.branch = release-2022.12.20
+# --- LA CORRECTION EST ICI ---
+# On passe sur la branche principale pour avoir le support AAB
+p4a.branch = master
+# -----------------------------
 
 [buildozer]
 log_level = 2
