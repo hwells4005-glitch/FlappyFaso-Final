@@ -5,25 +5,28 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      # 1. On récupère le code
       - uses: actions/checkout@v4
 
-      # 2. LE GRAND NETTOYAGE (C'est ça qui va te sauver !)
-      # On supprime les anciens dossiers pour forcer une reconstruction propre
+      # 🕵️‍♂️ L'ESPION : Affiche le fichier pour prouver ce qu'il contient
+      - name: ESPION - VERIFIER LE FICHIER
+        run: |
+          echo "--- DÉBUT DU FICHIER ---"
+          cat buildozer.spec
+          echo "--- FIN DU FICHIER ---"
+
       - name: Force Clean & Fix Permissions
         run: |
           sudo rm -rf .buildozer
           sudo rm -rf bin
           sudo chmod 777 -R .
 
-      # 3. On lance la compilation (Version Docker Directe)
       - name: Build APK
         run: |
           docker run --rm -v ${{ github.workspace }}:/home/user/hostcwd kivy/buildozer android debug
 
-      # 4. On récupère l'APK
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: FlappyFaso-APK
           path: bin/*.apk
+          
