@@ -1,0 +1,20 @@
+            - nom : Télécharger un artefact de construction
+  utilise : actions/download-artifact@v7.0.0
+  avec:
+    # Nom de l'artefact à télécharger. Si non spécifié, tous les artefacts de l'exécution sont téléchargés.
+    nom : # facultatif
+    # Identifiants des artefacts à télécharger, séparés par des virgules. Vous pouvez utiliser soit `artifact-ids`, soit `name`, mais pas les deux.
+    identifiants d'artefacts : # facultatif
+    # Chemin de destination. Prend en charge l'expansion de base du tilde. Par défaut : $GITHUB_WORKSPACE
+    chemin : # optionnel
+    # Modèle glob correspondant aux artefacts à télécharger. Ignoré si un nom est spécifié.
+    modèle : # optionnel
+    Lorsque plusieurs artefacts correspondent, ce paramètre modifie le comportement des répertoires de destination. Si la valeur est « true », les artefacts téléchargés seront placés dans le répertoire spécifié par le chemin. Si la valeur est « false », les artefacts téléchargés seront extraits dans des répertoires nommés individuellement au sein du chemin spécifié.
+    fusion multiple : # optionnel, la valeur par défaut est false
+    # Jeton GitHub utilisé pour l'authentification auprès de l'API GitHub. Ce jeton est requis pour télécharger des artefacts depuis un autre dépôt ou une autre exécution de workflow. S'il n'est pas spécifié, l'action tentera de télécharger les artefacts depuis le dépôt et l'exécution de workflow actuels.
+    github-token : # optionnel
+    # Le propriétaire du dépôt et son nom, séparés par un « / ». Si un jeton GitHub est spécifié, il s'agit du dépôt à partir duquel les artefacts seront téléchargés.
+    repository: # facultatif, la valeur par défaut est ${{ github.repository }}
+    # L'identifiant de l'exécution du workflow à partir duquel l'artefact à télécharger a été chargé. Si un jeton GitHub est spécifié, il s'agit de l'exécution à partir de laquelle les artefacts seront téléchargés.
+    run-id : # facultatif, la valeur par défaut est ${{ github.run_id }}
+          
