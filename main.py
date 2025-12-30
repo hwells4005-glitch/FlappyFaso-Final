@@ -5,6 +5,7 @@ import wave
 import os
 from kivy.config import Config
 from kivy.storage.jsonstore import JsonStore
+from kivy.animation import Animation
 
 # Optimisation
 Config.set('graphics', 'resizable', '0')
@@ -15,14 +16,13 @@ from kivy.uix.floatlayout import FloatLayout
 from kivy.uix.widget import Widget
 from kivy.clock import Clock
 from kivy.lang import Builder
-from kivy.properties import NumericProperty, ListProperty, BooleanProperty, ObjectProperty
+from kivy.properties import NumericProperty, ListProperty, BooleanProperty, ObjectProperty, StringProperty
 from kivy.metrics import dp
 from kivy.graphics.texture import Texture
 from kivy.core.audio import SoundLoader
 
 # --- GÉNÉRATEUR DE SONS ---
 def create_sounds():
-    # 1. SCORE
     if not os.path.exists('score.wav'):
         with wave.open('score.wav', 'w') as f:
             f.setparams((1, 2, 44100, 0, 'NONE', 'not compressed'))
@@ -33,7 +33,6 @@ def create_sounds():
                 data.append(struct.pack('h', int(v * 32767)))
             f.writeframes(b''.join(data))
 
-    # 2. FLAP (Ailes)
     if not os.path.exists('flap.wav'):
         with wave.open('flap.wav', 'w') as f:
             f.setparams((1, 2, 44100, 0, 'NONE', 'not compressed'))
@@ -45,7 +44,6 @@ def create_sounds():
                 data.append(struct.pack('h', int(v * 32767)))
             f.writeframes(b''.join(data))
 
-    # 3. CRASH
     if not os.path.exists('crash.wav'):
         with wave.open('crash.wav', 'w') as f:
             f.setparams((1, 2, 44100, 0, 'NONE', 'not compressed'))
@@ -56,7 +54,6 @@ def create_sounds():
                 data.append(struct.pack('h', int(noise * 32767)))
             f.writeframes(b''.join(data))
 
-    # 4. AMBIANCE INFINIE
     if not os.path.exists('music.wav'):
         with wave.open('music.wav', 'w') as f:
             f.setparams((1, 2, 44100, 0, 'NONE', 'not compressed'))
@@ -106,7 +103,6 @@ kv = '''
 
 <Bird>:
     size_hint: None, None
-    # --- MODIF 1: OISEAU PLUS GRAND (70 au lieu de 45) ---
     size: dp(70), dp(70)
     canvas.before:
         PushMatrix
@@ -123,11 +119,22 @@ kv = '''
     canvas.after:
         PopMatrix
 
+# --- EFFET FLASH (FEEDBACK VISUEL) ---
+<Flash>:
+    size_hint: 1, 1
+    opacity: 0
+    canvas:
+        Color:
+            rgba: 1, 1, 1, 1
+        Rectangle:
+            pos: self.pos
+            size: self.size
+
 <FlappyGame>:
     pipe_layer: pipe_layer
     bird: bird
+    flash_layer: flash_layer
     
-    # FOND DRAPEAU
     canvas.before:
         Color:
             rgba: 1, 1, 1, 1
@@ -136,13 +143,12 @@ kv = '''
             size: self.size
             texture: self.bg_texture
     
-    # ETOILE CENTRALE
     FasoStar:
         id: bg_star
         size_hint: None, None
         size: dp(250), dp(250)
-        center: self.center
-        opacity: 0.8 if not root.started else 0.3
+        center_y: root.height / 2
+        opacity: 0.8 if not root.started else 0.4
 
     Widget:
         id: pipe_layer
@@ -152,7 +158,11 @@ kv = '''
         pos: dp(100), root.height / 2
         opacity: 1 if root.started else 0
 
-    # --- ECRAN ACCUEIL ---
+    # FLASH BLANC QUAND ON MARQUE
+    Flash:
+        id: flash_layer
+
+    # --- ACCUEIL ---
     BoxLayout:
         orientation: 'vertical'
         size_hint: 1, 1
@@ -166,35 +176,42 @@ kv = '''
             color: 1, 1, 1, 1
             outline_width: 3
             outline_color: 0,0,0,1
-            size_hint_y: 0.5
+            size_hint_y: 0.4
         
+        # AFFICHAGE DU RANG
         Label:
-            text: "Record: " + str(root.high_score)
-            font_size: '30sp'
-            color: 1, 1, 0, 1
+            text: root.rank_title
+            font_size: '25sp'
+            color: 0, 1, 0, 1
             bold: True
+            size_hint_y: 0.1
             outline_width: 1
             outline_color: 0,0,0,1
-            size_hint_y: 0.2
+        
+        Label:
+            text: "Total XP: " + str(root.total_xp)
+            font_size: '20sp'
+            color: 1, 1, 1, 0.8
+            size_hint_y: 0.1
 
         Label:
             text: "Taper pour jouer"
             font_size: '25sp'
             bold: True
-            size_hint_y: 0.3
+            size_hint_y: 0.4
             outline_width: 1
             outline_color: 0,0,0,1
 
-    # --- ECRAN GAME OVER ---
+    # --- GAME OVER (AVEC MEDAILLES) ---
     BoxLayout:
         orientation: 'vertical'
-        size_hint: 0.8, 0.4
+        size_hint: 0.8, 0.5
         pos_hint: {'center_x': 0.5, 'center_y': 0.5}
         visible: root.game_over
         opacity: 1 if root.game_over else 0
         canvas.before:
             Color:
-                rgba: 0, 0, 0, 0.8
+                rgba: 0, 0, 0, 0.9
             RoundedRectangle:
                 pos: self.pos
                 size: self.size
@@ -205,23 +222,33 @@ kv = '''
             font_size: '40sp'
             bold: True
             color: 1, 0, 0, 1
+            size_hint_y: 0.2
             
+        # MEDAILLE
+        Label:
+            text: root.medal_icon
+            font_size: '60sp'
+            size_hint_y: 0.3
+
         Label:
             text: "Score: " + str(root.score)
             font_size: '30sp'
+            size_hint_y: 0.15
             
         Label:
-            text: "Record: " + str(root.high_score)
-            font_size: '30sp'
+            text: "Meilleur: " + str(root.high_score)
+            font_size: '20sp'
             color: 1, 1, 0, 1
+            size_hint_y: 0.15
             
         Button:
             text: "REJOUER"
             font_size: '25sp'
             background_color: 0, 0.6, 0, 1
             on_release: root.reset()
+            size_hint_y: 0.2
 
-    # SCORE EN JEU
+    # SCORE JEU
     Label:
         text: str(root.score)
         font_size: '60sp'
@@ -232,6 +259,9 @@ kv = '''
         outline_color: 0,0,0,1
         opacity: 1 if root.started and not root.game_over else 0
 '''
+
+class Flash(Widget):
+    pass
 
 class FasoStar(Widget):
     vertices = ListProperty([])
@@ -258,8 +288,6 @@ class FasoStar(Widget):
         self.indices = list(range(12))
 
 class Pipe(Widget):
-    # --- MODIF 2: GAP PLUS LARGE (180 au lieu de 160) ---
-    # Pour laisser passer le gros oiseau !
     gap = NumericProperty(dp(180))
     top_y = NumericProperty(0)
     top_h = NumericProperty(0)
@@ -285,16 +313,24 @@ class Bird(Widget):
 class FlappyGame(FloatLayout):
     score = NumericProperty(0)
     high_score = NumericProperty(0)
+    total_xp = NumericProperty(0) # XP CUMULÉ
+    rank_title = StringProperty("Touriste") # TITRE DU JOUEUR
+    medal_icon = StringProperty("") # MEDAILLE FINALE
+    
     started = BooleanProperty(False)
     game_over = BooleanProperty(False)
     velocity = NumericProperty(0)
     gravity = NumericProperty(dp(1300))
+    game_speed = NumericProperty(dp(200))
+    
     pipes = ListProperty([])
     bird = ObjectProperty(None)
     pipe_layer = ObjectProperty(None)
+    flash_layer = ObjectProperty(None)
     bg_texture = ObjectProperty(None)
     pipe_tex_red = ObjectProperty(None)
     pipe_tex_green = ObjectProperty(None)
+    bg_star = ObjectProperty(None)
     
     sound_score = ObjectProperty(None)
     sound_flap = ObjectProperty(None)
@@ -314,9 +350,6 @@ class FlappyGame(FloatLayout):
             self.sound_score = SoundLoader.load('score.wav')
             self.sound_flap = SoundLoader.load('flap.wav')
             self.sound_crash = SoundLoader.load('crash.wav')
-            
-            # --- MODIF 3: MUSIQUE INFINIE ---
-            # On la lance dès le chargement du jeu
             self.music = SoundLoader.load('music.wav')
             if self.music: 
                 self.music.loop = True
@@ -324,25 +357,59 @@ class FlappyGame(FloatLayout):
                 self.music.play() 
         except: pass
 
-        self.store = JsonStore('high_score.json')
-        if self.store.exists('best'):
-            self.high_score = self.store.get('best')['score']
+        # CHARGEMENT SAUVEGARDE (XP + BEST)
+        self.store = JsonStore('game_data.json')
+        if self.store.exists('stats'):
+            data = self.store.get('stats')
+            self.high_score = data.get('best', 0)
+            self.total_xp = data.get('xp', 0)
+        self.update_rank()
 
         Clock.schedule_interval(self.update, 1.0/60.0)
         self.spawn_timer = 0
+        Clock.schedule_once(self.init_star, 0.1)
 
-    def save_score(self):
+    def init_star(self, dt):
+        if self.bg_star: self.bg_star.center_x = self.width / 2
+
+    def update_rank(self):
+        # SYSTEME DE RANGS (Addictif !)
+        if self.total_xp < 50: self.rank_title = "Touriste"
+        elif self.total_xp < 200: self.rank_title = "Apprenti"
+        elif self.total_xp < 500: self.rank_title = "Citoyen"
+        elif self.total_xp < 1000: self.rank_title = "Patriote"
+        elif self.total_xp < 5000: self.rank_title = "ÉTALON"
+        else: self.rank_title = "LÉGENDE DU FASO 👑"
+
+    def save_data(self):
+        # On sauvegarde le record ET l'XP total
         if self.score > self.high_score:
             self.high_score = self.score
-            self.store.put('best', score=self.high_score)
+        
+        # On ajoute le score de cette partie à l'XP total
+        self.total_xp += self.score
+        self.update_rank()
+        
+        self.store.put('stats', best=self.high_score, xp=self.total_xp)
 
     def trigger_game_over(self):
         if not self.game_over:
             self.game_over = True
-            # IMPORTANT: J'ai enlevé "music.stop()"
-            # La musique continue même quand on perd !
             if self.sound_crash: self.sound_crash.play()
-            self.save_score()
+            
+            # ATTRIBUTION MEDAILLE
+            if self.score >= 100: self.medal_icon = "💎" # Diamant
+            elif self.score >= 50: self.medal_icon = "🥇" # Or
+            elif self.score >= 20: self.medal_icon = "🥈" # Argent
+            elif self.score >= 10: self.medal_icon = "🥉" # Bronze
+            else: self.medal_icon = "💪" # Courage
+            
+            self.save_data()
+
+    def do_flash(self):
+        # Petit flash blanc satisfaisant
+        anim = Animation(opacity=0.6, duration=0.05) + Animation(opacity=0, duration=0.15)
+        anim.start(self.flash_layer)
 
     def gen_pipe_tex(self, color):
         tex = Texture.create(size=(32, 1), colorfmt='rgb')
@@ -377,7 +444,6 @@ class FlappyGame(FloatLayout):
         if not self.started:
             self.started = True
             self.velocity = dp(400)
-            # Pas besoin de lancer la musique ici, elle tourne déjà !
         else:
             self.velocity = dp(400)
 
@@ -389,7 +455,9 @@ class FlappyGame(FloatLayout):
         self.velocity = 0
         self.score = 0
         self.game_over = False
-        self.started = False 
+        self.started = False
+        self.game_speed = dp(200)
+        if self.bg_star: self.bg_star.center_x = self.width / 2
 
     def spawn_pipe(self):
         p = Pipe(tex_top=self.pipe_tex_red, tex_bot=self.pipe_tex_green)
@@ -399,6 +467,17 @@ class FlappyGame(FloatLayout):
         self.pipes.append(p)
 
     def update(self, dt):
+        # VITESSE PROGRESSIVE
+        target_speed = dp(200) + (self.score * dp(5))
+        if target_speed > dp(450): target_speed = dp(450)
+        self.game_speed = target_speed
+
+        # ANIMATION ETOILE
+        if self.bg_star and self.started and not self.game_over:
+            self.bg_star.x -= (self.game_speed * 0.3) * dt
+            if self.bg_star.right < 0:
+                self.bg_star.x = self.width
+
         if not self.started or self.game_over: return
         
         self.velocity -= self.gravity * dt
@@ -406,16 +485,21 @@ class FlappyGame(FloatLayout):
         self.bird.angle = max(min(self.velocity * 0.15, 30), -60)
         
         self.spawn_timer += dt
-        if self.spawn_timer > 1.8:
+        required_time = 1.8 * (dp(200) / self.game_speed) 
+        if self.spawn_timer > required_time:
             self.spawn_pipe()
             self.spawn_timer = 0
             
         for p in self.pipes[:]:
-            p.x -= dp(200) * dt
+            p.x -= self.game_speed * dt
             
             if p.right < self.bird.x and not p.scored:
                 self.score += 1
                 p.scored = True
+                
+                # --- EFFET FLASH ---
+                self.do_flash()
+                
                 if self.sound_score:
                     if self.sound_score.state == 'play': self.sound_score.stop()
                     self.sound_score.play()
@@ -438,4 +522,3 @@ class FlappyApp(App):
 
 if __name__ == '__main__':
     FlappyApp().run()
-            
