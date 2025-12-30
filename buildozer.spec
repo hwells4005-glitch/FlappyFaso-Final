@@ -1,18 +1,21 @@
 [app]
+# 1. IDENTITÉ
 title = Flappy Faso
 package.name = flappyfaso
 package.domain = org.faso
 source.dir = .
 source.include_exts = py,png,jpg,kv,atlas,wav
 
-version = 2.1
+version = 2.5
 
-# ⚠️ REGARDE : J'AI AJOUTÉ L'ICÔNE ICI
+# 2. LES IMAGES (C'est ici que la magie opère !)
 icon.filename = icon.png
+presplash.filename = presplash.png
 
-# Requirements LÉGERS (Surtout pas de ffpyplayer !)
+# 3. MOTEUR LÉGER (Sans bug)
 requirements = python3,kivy==2.2.0,android
 
+# 4. CONFIGURATION ÉCRAN
 orientation = portrait
 fullscreen = 0
 android.permissions = INTERNET
