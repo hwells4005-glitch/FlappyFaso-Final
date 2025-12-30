@@ -4,7 +4,7 @@ import struct
 import wave
 import os
 from kivy.config import Config
-from kivy.storage.jsonstore import JsonStore # Pour la sauvegarde
+from kivy.storage.jsonstore import JsonStore
 
 # Optimisation
 Config.set('graphics', 'resizable', '0')
@@ -15,49 +15,59 @@ from kivy.uix.floatlayout import FloatLayout
 from kivy.uix.widget import Widget
 from kivy.clock import Clock
 from kivy.lang import Builder
-from kivy.properties import NumericProperty, ListProperty, BooleanProperty, ObjectProperty, StringProperty
+from kivy.properties import NumericProperty, ListProperty, BooleanProperty, ObjectProperty
 from kivy.metrics import dp
 from kivy.graphics.texture import Texture
 from kivy.core.audio import SoundLoader
 
-# --- GÉNÉRATEUR DE SONS (TOUT EN UN) ---
+# --- GÉNÉRATEUR DE SONS ---
 def create_sounds():
-    # 1. SCORE (Ti-Ding!)
-    if not os.path.exists('score_chic.wav'):
-        with wave.open('score_chic.wav', 'w') as f:
+    # 1. SCORE
+    if not os.path.exists('score.wav'):
+        with wave.open('score.wav', 'w') as f:
             f.setparams((1, 2, 44100, 0, 'NONE', 'not compressed'))
             data = []
-            for i in range(int(44100 * 0.05)):
-                v = math.sin(2 * math.pi * 987.77 * (i / 44100.0)) * 0.5
-                data.append(struct.pack('h', int(v * 32767)))
-            for i in range(int(44100 * 0.15)):
-                vol = 0.5 * (1 - (i / (44100 * 0.15)))
-                v = math.sin(2 * math.pi * 1318.51 * (i / 44100.0)) * vol
+            for i in range(int(44100 * 0.1)):
+                vol = 0.5 * (1 - (i / (44100 * 0.1)))
+                v = math.sin(2 * math.pi * 1500 * (i / 44100.0)) * vol
                 data.append(struct.pack('h', int(v * 32767)))
             f.writeframes(b''.join(data))
 
-    # 2. START (Jump)
-    if not os.path.exists('start.wav'):
-        with wave.open('start.wav', 'w') as f:
+    # 2. FLAP (Ailes)
+    if not os.path.exists('flap.wav'):
+        with wave.open('flap.wav', 'w') as f:
             f.setparams((1, 2, 44100, 0, 'NONE', 'not compressed'))
             data = []
-            for i in range(int(44100 * 0.2)):
-                freq = 400 + (i / (44100 * 0.2)) * 600
-                v = math.sin(2 * math.pi * freq * (i / 44100.0)) * 0.3
+            for i in range(int(44100 * 0.1)):
+                freq = 600 - (i / (44100 * 0.1)) * 400 
+                vol = 0.4 * (1 - (i / (44100 * 0.1)))
+                v = math.sin(2 * math.pi * freq * (i / 44100.0)) * vol
                 data.append(struct.pack('h', int(v * 32767)))
             f.writeframes(b''.join(data))
 
-    # 3. CRASH (Bruit blanc / Choc)
+    # 3. CRASH
     if not os.path.exists('crash.wav'):
         with wave.open('crash.wav', 'w') as f:
             f.setparams((1, 2, 44100, 0, 'NONE', 'not compressed'))
             data = []
-            # Génération de bruit blanc qui diminue
             for i in range(int(44100 * 0.3)):
-                vol = 0.8 * (1 - (i / (44100 * 0.3))) # Fade out
-                # Bruit aléatoire
+                vol = 0.8 * (1 - (i / (44100 * 0.3)))
                 noise = (random.random() * 2 - 1) * vol
                 data.append(struct.pack('h', int(noise * 32767)))
+            f.writeframes(b''.join(data))
+
+    # 4. AMBIANCE INFINIE
+    if not os.path.exists('music.wav'):
+        with wave.open('music.wav', 'w') as f:
+            f.setparams((1, 2, 44100, 0, 'NONE', 'not compressed'))
+            data = []
+            tempo = 44100 * 0.5 
+            total_len = int(44100 * 2.0)
+            for i in range(total_len):
+                val = 0
+                if (i % int(tempo)) < 2000:
+                    val = 0.3 * math.sin(2 * math.pi * 100 * (i/44100.0))
+                data.append(struct.pack('h', int(val * 32767)))
             f.writeframes(b''.join(data))
 
 kv = '''
@@ -96,14 +106,14 @@ kv = '''
 
 <Bird>:
     size_hint: None, None
-    size: dp(45), dp(45)
+    # --- MODIF 1: OISEAU PLUS GRAND (70 au lieu de 45) ---
+    size: dp(70), dp(70)
     canvas.before:
         PushMatrix
         Rotate:
             angle: self.angle
             origin: self.center
     canvas:
-        # ON REMPLACE L'ELLIPSE PAR L'IMAGE
         Color:
             rgba: 1, 1, 1, 1
         Rectangle:
@@ -159,7 +169,7 @@ kv = '''
             size_hint_y: 0.5
         
         Label:
-            text: "Meilleur Score: " + str(root.high_score)
+            text: "Record: " + str(root.high_score)
             font_size: '30sp'
             color: 1, 1, 0, 1
             bold: True
@@ -232,9 +242,7 @@ class FasoStar(Widget):
         self.bind(pos=self.calculate_points, size=self.calculate_points)
         Clock.schedule_once(self.calculate_points, 0)
         Clock.schedule_interval(self.rotate, 1.0/60.0)
-    
     def rotate(self, dt): self.angle += 0.5
-        
     def calculate_points(self, *args):
         cx, cy = self.center_x, self.center_y
         outer = self.width / 2
@@ -250,7 +258,9 @@ class FasoStar(Widget):
         self.indices = list(range(12))
 
 class Pipe(Widget):
-    gap = NumericProperty(dp(160))
+    # --- MODIF 2: GAP PLUS LARGE (180 au lieu de 160) ---
+    # Pour laisser passer le gros oiseau !
+    gap = NumericProperty(dp(180))
     top_y = NumericProperty(0)
     top_h = NumericProperty(0)
     bottom_h = NumericProperty(0)
@@ -274,7 +284,7 @@ class Bird(Widget):
 
 class FlappyGame(FloatLayout):
     score = NumericProperty(0)
-    high_score = NumericProperty(0) # Variable Record
+    high_score = NumericProperty(0)
     started = BooleanProperty(False)
     game_over = BooleanProperty(False)
     velocity = NumericProperty(0)
@@ -287,25 +297,33 @@ class FlappyGame(FloatLayout):
     pipe_tex_green = ObjectProperty(None)
     
     sound_score = ObjectProperty(None)
-    sound_start = ObjectProperty(None)
+    sound_flap = ObjectProperty(None)
     sound_crash = ObjectProperty(None)
+    music = ObjectProperty(None)
     
     store = None
     
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        # 1. TEXTURES & SONS
         self.generate_flag_bg()
         self.pipe_tex_red = self.gen_pipe_tex((239, 43, 45))
         self.pipe_tex_green = self.gen_pipe_tex((0, 158, 73))
+        
         create_sounds()
         try:
-            self.sound_score = SoundLoader.load('score_chic.wav')
-            self.sound_start = SoundLoader.load('start.wav')
+            self.sound_score = SoundLoader.load('score.wav')
+            self.sound_flap = SoundLoader.load('flap.wav')
             self.sound_crash = SoundLoader.load('crash.wav')
+            
+            # --- MODIF 3: MUSIQUE INFINIE ---
+            # On la lance dès le chargement du jeu
+            self.music = SoundLoader.load('music.wav')
+            if self.music: 
+                self.music.loop = True
+                self.music.volume = 0.5
+                self.music.play() 
         except: pass
 
-        # 2. CHARGEMENT DU MEILLEUR SCORE
         self.store = JsonStore('high_score.json')
         if self.store.exists('best'):
             self.high_score = self.store.get('best')['score']
@@ -321,6 +339,8 @@ class FlappyGame(FloatLayout):
     def trigger_game_over(self):
         if not self.game_over:
             self.game_over = True
+            # IMPORTANT: J'ai enlevé "music.stop()"
+            # La musique continue même quand on perd !
             if self.sound_crash: self.sound_crash.play()
             self.save_score()
 
@@ -347,15 +367,17 @@ class FlappyGame(FloatLayout):
         self.bg_texture = tex
 
     def on_touch_down(self, touch):
-        # Si Game Over, le bouton Rejouer s'en occupe
         if self.game_over:
-             # On laisse le bouton gérer
              return super().on_touch_down(touch)
              
+        if self.sound_flap:
+            if self.sound_flap.state == 'play': self.sound_flap.stop()
+            self.sound_flap.play()
+
         if not self.started:
             self.started = True
             self.velocity = dp(400)
-            if self.sound_start: self.sound_start.play()
+            # Pas besoin de lancer la musique ici, elle tourne déjà !
         else:
             self.velocity = dp(400)
 
@@ -416,4 +438,4 @@ class FlappyApp(App):
 
 if __name__ == '__main__':
     FlappyApp().run()
-    
+            
