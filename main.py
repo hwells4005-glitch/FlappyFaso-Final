@@ -18,26 +18,37 @@ from kivy.properties import NumericProperty, ListProperty, BooleanProperty, Obje
 from kivy.metrics import dp
 from kivy.graphics.texture import Texture
 from kivy.core.audio import SoundLoader
+from kivy.animation import Animation
 
-# --- GÉNÉRATEUR DE SON (TECHNIQUE LÉGÈRE) ---
-def create_beep():
-    # On fabrique un petit fichier WAV 'score.wav' s'il n'existe pas
-    if not os.path.exists('score.wav'):
-        noise_output = wave.open('score.wav', 'w')
-        noise_output.setparams((1, 2, 44100, 0, 'NONE', 'not compressed'))
-        
-        # Un son court et aigu (type "Coin" de Mario)
-        duration = 0.1  # secondes
-        volume = 0.5
-        values = []
-        for i in range(0, int(44100 * duration)):
-            value = math.sin(2 * math.pi * 880 * (i / 44100.0)) * (volume * 32767)
-            packed_value = struct.pack('h', int(value))
-            values.append(packed_value)
-            
-        value_str = b''.join(values)
-        noise_output.writeframes(value_str)
-        noise_output.close()
+# --- GÉNÉRATEUR DE SONS "CHIC" (STYLE NINTENDO) ---
+def create_sounds():
+    # 1. SON DU SCORE (Ti-Ding !)
+    if not os.path.exists('score_chic.wav'):
+        with wave.open('score_chic.wav', 'w') as f:
+            f.setparams((1, 2, 44100, 0, 'NONE', 'not compressed'))
+            data = []
+            # Note 1 : Si (High B) rapide
+            for i in range(int(44100 * 0.05)):
+                v = math.sin(2 * math.pi * 987.77 * (i / 44100.0)) * 0.5
+                data.append(struct.pack('h', int(v * 32767)))
+            # Note 2 : Mi (High E) plus long avec fade out
+            for i in range(int(44100 * 0.15)):
+                vol = 0.5 * (1 - (i / (44100 * 0.15))) # Volume baisse
+                v = math.sin(2 * math.pi * 1318.51 * (i / 44100.0)) * vol
+                data.append(struct.pack('h', int(v * 32767)))
+            f.writeframes(b''.join(data))
+
+    # 2. SON DE DEPART (Jump)
+    if not os.path.exists('start.wav'):
+        with wave.open('start.wav', 'w') as f:
+            f.setparams((1, 2, 44100, 0, 'NONE', 'not compressed'))
+            data = []
+            # Son qui monte (Frequency sweep)
+            for i in range(int(44100 * 0.2)):
+                freq = 400 + (i / (44100 * 0.2)) * 600 # De 400Hz à 1000Hz
+                v = math.sin(2 * math.pi * freq * (i / 44100.0)) * 0.3
+                data.append(struct.pack('h', int(v * 32767)))
+            f.writeframes(b''.join(data))
 
 kv = '''
 #:import dp kivy.metrics.dp
@@ -45,7 +56,7 @@ kv = '''
 <FasoStar>:
     canvas:
         Color:
-            rgba: 0.988, 0.82, 0.086, 0.8
+            rgba: 0.988, 0.82, 0.086, 0.9
         Mesh:
             mode: 'triangle_fan'
             vertices: self.vertices
@@ -113,12 +124,13 @@ kv = '''
             size: self.size
             texture: self.bg_texture
     
-    # ETOILE CENTRALE
+    # ETOILE CENTRALE (DÉCORATION DE FOND)
     FasoStar:
         id: bg_star
         size_hint: None, None
-        size: dp(200), dp(200)
-        center: self.parent.center if self.parent else (0,0)
+        size: dp(250), dp(250)
+        center: self.center
+        opacity: 0.8 if not root.started else 0.3 # Plus visible au menu
 
     Widget:
         id: pipe_layer
@@ -126,8 +138,35 @@ kv = '''
     Bird:
         id: bird
         pos: dp(100), root.height / 2
+        opacity: 1 if root.started else 0 # Caché au menu
 
-    # SCORE
+    # --- PAGE D'ACCUEIL ---
+    BoxLayout:
+        orientation: 'vertical'
+        size_hint: 1, 1
+        visible: not root.started
+        opacity: 1 if not root.started else 0
+        
+        Label:
+            text: "FLAPPY FASO"
+            font_size: '50sp'
+            bold: True
+            color: 1, 1, 1, 1
+            outline_width: 3
+            outline_color: 0,0,0,1
+            size_hint_y: 0.6
+            
+        Label:
+            text: "Taper pour jouer"
+            font_size: '25sp'
+            bold: True
+            color: 1, 1, 1, 1
+            outline_width: 1
+            outline_color: 0,0,0,1
+            size_hint_y: 0.4
+            id: start_label
+
+    # SCORE (Visible seulement en jeu)
     Label:
         text: str(root.score)
         font_size: '60sp'
@@ -136,25 +175,25 @@ kv = '''
         color: 1, 1, 1, 1
         outline_width: 2
         outline_color: 0,0,0,1
-
-    Label:
-        text: "TAP TO START" if not root.started else ""
-        font_size: '30sp'
-        bold: True
-        color: 1, 1, 1, 1
-        outline_width: 2
-        outline_color: 0,0,0,1
-        center: root.center
+        opacity: 1 if root.started else 0
 '''
 
 class FasoStar(Widget):
     vertices = ListProperty([])
     indices = ListProperty([])
+    angle = NumericProperty(0)
+    
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.bind(pos=self.calculate_points, size=self.calculate_points)
         Clock.schedule_once(self.calculate_points, 0)
+        # Animation de rotation douce
+        Clock.schedule_interval(self.rotate, 1.0/60.0)
     
+    def rotate(self, dt):
+        self.angle += 0.5
+        # Ici on pourrait faire tourner l'étoile si on ajoute Rotate dans le canvas
+        
     def calculate_points(self, *args):
         cx, cy = self.center_x, self.center_y
         outer = self.width / 2
@@ -206,7 +245,8 @@ class FlappyGame(FloatLayout):
     bg_texture = ObjectProperty(None)
     pipe_tex_red = ObjectProperty(None)
     pipe_tex_green = ObjectProperty(None)
-    sound = ObjectProperty(None)
+    sound_score = ObjectProperty(None)
+    sound_start = ObjectProperty(None)
     
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -215,12 +255,12 @@ class FlappyGame(FloatLayout):
         self.pipe_tex_red = self.gen_pipe_tex((239, 43, 45))
         self.pipe_tex_green = self.gen_pipe_tex((0, 158, 73))
         
-        # 2. AUDIO (Création + Chargement)
-        create_beep()
+        # 2. AUDIO "CHIC" & START
+        create_sounds()
         try:
-            self.sound = SoundLoader.load('score.wav')
-        except:
-            print("Erreur chargement audio")
+            self.sound_score = SoundLoader.load('score_chic.wav')
+            self.sound_start = SoundLoader.load('start.wav')
+        except: pass
 
         Clock.schedule_interval(self.update, 1.0/60.0)
         self.spawn_timer = 0
@@ -249,9 +289,14 @@ class FlappyGame(FloatLayout):
 
     def on_touch_down(self, touch):
         if self.game_over:
-            self.reset()
-        else:
+            self.reset() # Retour au menu
+        elif not self.started:
+            # DÉMARRAGE DU JEU
             self.started = True
+            self.velocity = dp(400)
+            if self.sound_start: self.sound_start.play()
+        else:
+            # SAUT PENDANT LE JEU
             self.velocity = dp(400)
 
     def reset(self):
@@ -262,7 +307,7 @@ class FlappyGame(FloatLayout):
         self.velocity = 0
         self.score = 0
         self.game_over = False
-        self.started = False
+        self.started = False # Retour écran accueil
 
     def spawn_pipe(self):
         p = Pipe(tex_top=self.pipe_tex_red, tex_bot=self.pipe_tex_green)
@@ -289,14 +334,12 @@ class FlappyGame(FloatLayout):
             if p.right < self.bird.x and not p.scored:
                 self.score += 1
                 p.scored = True
-                # --- LECTURE DU SON (SAFE) ---
-                if self.sound:
-                    try:
-                        if self.sound.state == 'play':
-                            self.sound.stop()
-                        self.sound.volume = 1.0
-                        self.sound.play()
-                    except: pass
+                # --- NOUVEAU SON CHIC ---
+                if self.sound_score:
+                    if self.sound_score.state == 'play':
+                        self.sound_score.stop()
+                    self.sound_score.volume = 1.0
+                    self.sound_score.play()
             
             if p.right < 0:
                 self.pipe_layer.remove_widget(p)
@@ -316,4 +359,4 @@ class FlappyApp(App):
 
 if __name__ == '__main__':
     FlappyApp().run()
-        
+            
