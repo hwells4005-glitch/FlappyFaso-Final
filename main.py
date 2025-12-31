@@ -165,7 +165,6 @@ kv = '''
             outline_color: 0,0,0,1
             size_hint_y: 0.4
         
-        # RANG (MODIFIÉ: PLUS DE TOURISTE !)
         Label:
             text: root.rank_title
             font_size: '28sp'
@@ -212,12 +211,11 @@ kv = '''
             color: 1, 0, 0, 1
             size_hint_y: 0.2
             
-        # MEDAILLE (CORRIGÉE: TEXTE COLORÉ AU LIEU D'IMAGE)
         Label:
             text: root.medal_text
             font_size: '35sp'
             bold: True
-            color: root.medal_color # La couleur change selon la médaille
+            color: root.medal_color
             size_hint_y: 0.3
             outline_width: 2
             outline_color: 0,0,0,1
@@ -308,9 +306,7 @@ class FlappyGame(FloatLayout):
     total_xp = NumericProperty(0)
     display_xp = NumericProperty(0)
     
-    rank_title = StringProperty("NOVICE") # On remplace Touriste
-    
-    # NOUVEAU SYSTEME DE MEDAILLE (Texte + Couleur)
+    rank_title = StringProperty("NOVICE")
     medal_text = StringProperty("")
     medal_color = ListProperty([1, 1, 1, 1])
     
@@ -345,7 +341,12 @@ class FlappyGame(FloatLayout):
         create_sounds()
         try:
             self.sound_score = SoundLoader.load('score.wav')
+            
+            # --- MODIF AUDIO : VOLUME RÉDUIT ---
             self.sound_flap = SoundLoader.load('flap.wav') 
+            if self.sound_flap:
+                self.sound_flap.volume = 0.4 # Volume à 40% (Plus doux)
+
             self.sound_crash = SoundLoader.load('crash.wav')
             self.music = SoundLoader.load('music.wav')
             if self.music: 
@@ -376,8 +377,7 @@ class FlappyGame(FloatLayout):
         anim.start(self)
 
     def update_rank(self):
-        # ICI ON CHANGE LES NOMS DES RANGS
-        if self.total_xp < 50: self.rank_title = "NOVICE" # Fini "Touriste"
+        if self.total_xp < 50: self.rank_title = "NOVICE"
         elif self.total_xp < 200: self.rank_title = "APPRENTI"
         elif self.total_xp < 500: self.rank_title = "CITOYEN"
         elif self.total_xp < 1000: self.rank_title = "PATRIOTE"
@@ -397,20 +397,18 @@ class FlappyGame(FloatLayout):
             self.game_over = True
             if self.sound_crash: self.sound_crash.play()
             
-            # ATTRIBUTION MEDAILLE (TEXTE + COULEUR)
-            # Plus de problème d'image buggée !
             if self.score >= 50: 
                 self.medal_text = "MEDAILLE D'OR"
-                self.medal_color = [1, 0.84, 0, 1] # Jaune Or
+                self.medal_color = [1, 0.84, 0, 1]
             elif self.score >= 20: 
                 self.medal_text = "MEDAILLE D'ARGENT"
-                self.medal_color = [0.75, 0.75, 0.75, 1] # Gris Argent
+                self.medal_color = [0.75, 0.75, 0.75, 1]
             elif self.score >= 10: 
                 self.medal_text = "MEDAILLE DE BRONZE"
-                self.medal_color = [0.8, 0.5, 0.2, 1] # Marron Bronze
+                self.medal_color = [0.8, 0.5, 0.2, 1]
             else: 
                 self.medal_text = "COURAGE !"
-                self.medal_color = [1, 1, 1, 1] # Blanc
+                self.medal_color = [1, 1, 1, 1]
             
             self.save_data()
 
@@ -510,9 +508,11 @@ class FlappyGame(FloatLayout):
             if p.right < 0:
                 self.pipe_layer.remove_widget(p)
                 self.pipes.remove(p)
-                
-            if (self.bird.right > p.x and self.bird.x < p.right):
-                if (self.bird.y < p.bottom_h) or (self.bird.top > p.top_y):
+            
+            # --- COLLISION V33 AVEC MARGE ---
+            hit_margin = dp(15) 
+            if (self.bird.right - hit_margin > p.x and self.bird.x + hit_margin < p.right):
+                if (self.bird.y + hit_margin < p.bottom_h) or (self.bird.top - hit_margin > p.top_y):
                     self.trigger_game_over()
                     
         if self.bird.y < 0 or self.bird.top > self.height:
@@ -525,4 +525,3 @@ class FlappyApp(App):
 
 if __name__ == '__main__':
     FlappyApp().run()
-        
