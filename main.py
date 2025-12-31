@@ -16,14 +16,13 @@ from kivy.uix.floatlayout import FloatLayout
 from kivy.uix.widget import Widget
 from kivy.clock import Clock
 from kivy.lang import Builder
-from kivy.properties import NumericProperty, ListProperty, BooleanProperty, ObjectProperty, StringProperty
+from kivy.properties import NumericProperty, ListProperty, BooleanProperty, ObjectProperty, StringProperty, ListProperty
 from kivy.metrics import dp
 from kivy.graphics.texture import Texture
 from kivy.core.audio import SoundLoader
 
-# --- GÉNÉRATEUR DE SONS (Sauf pour flap.wav qui est importé) ---
+# --- GÉNÉRATEUR DE SONS (Sauf flap.wav) ---
 def create_sounds():
-    # On garde la génération pour le score et crash SI ils n'existent pas
     if not os.path.exists('score.wav'):
         with wave.open('score.wav', 'w') as f:
             f.setparams((1, 2, 44100, 0, 'NONE', 'not compressed'))
@@ -33,9 +32,6 @@ def create_sounds():
                 v = math.sin(2 * math.pi * 1500 * (i / 44100.0)) * vol
                 data.append(struct.pack('h', int(v * 32767)))
             f.writeframes(b''.join(data))
-
-    # NOTE : J'AI RETIRÉ LA GÉNÉRATION DE 'flap.wav' 
-    # Le jeu va chercher TON fichier importé.
 
     if not os.path.exists('crash.wav'):
         with wave.open('crash.wav', 'w') as f:
@@ -153,14 +149,13 @@ kv = '''
     Flash:
         id: flash_layer
 
-    # --- ACCUEIL (ANIMÉ) ---
+    # --- ACCUEIL ---
     BoxLayout:
         orientation: 'vertical'
         size_hint: 1, 1
         visible: not root.started and not root.game_over
         opacity: 1 if (not root.started and not root.game_over) else 0
         
-        # TITRE QUI RESPIRE (Pulse)
         Label:
             text: "FLAPPY FASO"
             font_size: '50sp'
@@ -169,9 +164,8 @@ kv = '''
             outline_width: 3
             outline_color: 0,0,0,1
             size_hint_y: 0.4
-            id: title_label
         
-        # RANG (Couleur animée)
+        # RANG (MODIFIÉ: PLUS DE TOURISTE !)
         Label:
             text: root.rank_title
             font_size: '28sp'
@@ -181,7 +175,6 @@ kv = '''
             outline_width: 1
             outline_color: 0,0,0,1
         
-        # XP ANIMÉ (Compteur)
         Label:
             text: "XP TOTAL: " + str(int(root.display_xp))
             font_size: '22sp'
@@ -196,7 +189,6 @@ kv = '''
             size_hint_y: 0.4
             outline_width: 1
             outline_color: 0,0,0,1
-            id: tap_label
 
     # --- GAME OVER ---
     BoxLayout:
@@ -220,10 +212,15 @@ kv = '''
             color: 1, 0, 0, 1
             size_hint_y: 0.2
             
+        # MEDAILLE (CORRIGÉE: TEXTE COLORÉ AU LIEU D'IMAGE)
         Label:
-            text: root.medal_icon
-            font_size: '60sp'
+            text: root.medal_text
+            font_size: '35sp'
+            bold: True
+            color: root.medal_color # La couleur change selon la médaille
             size_hint_y: 0.3
+            outline_width: 2
+            outline_color: 0,0,0,1
 
         Label:
             text: "Score: " + str(root.score)
@@ -309,10 +306,13 @@ class FlappyGame(FloatLayout):
     score = NumericProperty(0)
     high_score = NumericProperty(0)
     total_xp = NumericProperty(0)
-    display_xp = NumericProperty(0) # VARIABLE ANIMÉE
+    display_xp = NumericProperty(0)
     
-    rank_title = StringProperty("Touriste")
-    medal_icon = StringProperty("")
+    rank_title = StringProperty("NOVICE") # On remplace Touriste
+    
+    # NOUVEAU SYSTEME DE MEDAILLE (Texte + Couleur)
+    medal_text = StringProperty("")
+    medal_color = ListProperty([1, 1, 1, 1])
     
     started = BooleanProperty(False)
     game_over = BooleanProperty(False)
@@ -345,7 +345,6 @@ class FlappyGame(FloatLayout):
         create_sounds()
         try:
             self.sound_score = SoundLoader.load('score.wav')
-            # CHARGEMENT DU SON IMPORTÉ
             self.sound_flap = SoundLoader.load('flap.wav') 
             self.sound_crash = SoundLoader.load('crash.wav')
             self.music = SoundLoader.load('music.wav')
@@ -362,8 +361,6 @@ class FlappyGame(FloatLayout):
             self.high_score = data.get('best', 0)
             self.total_xp = data.get('xp', 0)
         self.update_rank()
-        
-        # ANIMATION DE DÉMARRAGE (XP qui compte)
         self.animate_xp()
 
         Clock.schedule_interval(self.update, 1.0/60.0)
@@ -374,16 +371,16 @@ class FlappyGame(FloatLayout):
         if self.bg_star: self.bg_star.center_x = self.width / 2
 
     def animate_xp(self):
-        # L'XP part de 0 et monte vers le vrai total en 1.5 secondes
         self.display_xp = 0
         anim = Animation(display_xp=self.total_xp, duration=1.5, t='out_expo')
         anim.start(self)
 
     def update_rank(self):
-        if self.total_xp < 50: self.rank_title = "Touriste"
-        elif self.total_xp < 200: self.rank_title = "Apprenti"
-        elif self.total_xp < 500: self.rank_title = "Citoyen"
-        elif self.total_xp < 1000: self.rank_title = "Patriote"
+        # ICI ON CHANGE LES NOMS DES RANGS
+        if self.total_xp < 50: self.rank_title = "NOVICE" # Fini "Touriste"
+        elif self.total_xp < 200: self.rank_title = "APPRENTI"
+        elif self.total_xp < 500: self.rank_title = "CITOYEN"
+        elif self.total_xp < 1000: self.rank_title = "PATRIOTE"
         elif self.total_xp < 5000: self.rank_title = "ÉTALON"
         else: self.rank_title = "LÉGENDE DU FASO 👑"
 
@@ -400,11 +397,20 @@ class FlappyGame(FloatLayout):
             self.game_over = True
             if self.sound_crash: self.sound_crash.play()
             
-            if self.score >= 100: self.medal_icon = "💎"
-            elif self.score >= 50: self.medal_icon = "🥇"
-            elif self.score >= 20: self.medal_icon = "🥈"
-            elif self.score >= 10: self.medal_icon = "🥉"
-            else: self.medal_icon = "💪"
+            # ATTRIBUTION MEDAILLE (TEXTE + COULEUR)
+            # Plus de problème d'image buggée !
+            if self.score >= 50: 
+                self.medal_text = "MEDAILLE D'OR"
+                self.medal_color = [1, 0.84, 0, 1] # Jaune Or
+            elif self.score >= 20: 
+                self.medal_text = "MEDAILLE D'ARGENT"
+                self.medal_color = [0.75, 0.75, 0.75, 1] # Gris Argent
+            elif self.score >= 10: 
+                self.medal_text = "MEDAILLE DE BRONZE"
+                self.medal_color = [0.8, 0.5, 0.2, 1] # Marron Bronze
+            else: 
+                self.medal_text = "COURAGE !"
+                self.medal_color = [1, 1, 1, 1] # Blanc
             
             self.save_data()
 
@@ -459,8 +465,6 @@ class FlappyGame(FloatLayout):
         self.started = False
         self.game_speed = dp(200)
         if self.bg_star: self.bg_star.center_x = self.width / 2
-        
-        # ON RELANCE L'ANIMATION DE L'XP QUAND ON REVIENT AU MENU
         self.animate_xp()
 
     def spawn_pipe(self):
