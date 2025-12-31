@@ -13,6 +13,7 @@ Config.set('kivy', 'exit_on_escape', '1')
 
 from kivy.app import App
 from kivy.uix.floatlayout import FloatLayout
+from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.widget import Widget
 from kivy.clock import Clock
 from kivy.lang import Builder
@@ -61,8 +62,9 @@ kv = '''
 
 <FasoStar>:
     canvas:
+        # ETOILE AU PREMIER PLAN (COULEUR VIVE)
         Color:
-            rgba: 0.988, 0.82, 0.086, 0.9
+            rgba: 1, 0.84, 0, 1 
         Mesh:
             mode: 'triangle_fan'
             vertices: self.vertices
@@ -82,13 +84,13 @@ kv = '''
             size: self.width, self.bottom_h
             texture: self.tex_bot
         Color:
-            rgba: 0, 0, 0, 1
+            rgba: 0, 0, 0, 0.5
         Line:
             rectangle: (self.x, self.top_y, self.width, self.top_h)
-            width: 1.5
+            width: 1
         Line:
             rectangle: (self.x, self.y, self.width, self.bottom_h)
-            width: 1.5
+            width: 1
 
 <Bird>:
     size_hint: None, None
@@ -123,6 +125,7 @@ kv = '''
     bird: bird
     flash_layer: flash_layer
     
+    # 1. FOND (DRAPEAU) - Tout au fond
     canvas.before:
         Color:
             rgba: 1, 1, 1, 1
@@ -131,21 +134,25 @@ kv = '''
             size: self.size
             texture: self.bg_texture
     
+    # 2. ETOILE (Juste au dessus du fond, mais derrière les tuyaux)
     FasoStar:
         id: bg_star
         size_hint: None, None
         size: dp(250), dp(250)
         center_y: root.height / 2
-        opacity: 0.8 if not root.started else 0.4
+        opacity: 0.9 if not root.started else 0.5
 
+    # 3. TUYAUX
     Widget:
         id: pipe_layer
 
+    # 4. OISEAU
     Bird:
         id: bird
         pos: dp(100), root.height / 2
         opacity: 1 if root.started else 0
 
+    # 5. EFFETS ET UI
     Flash:
         id: flash_layer
 
@@ -153,8 +160,10 @@ kv = '''
     BoxLayout:
         orientation: 'vertical'
         size_hint: 1, 1
-        visible: not root.started and not root.game_over
-        opacity: 1 if (not root.started and not root.game_over) else 0
+        visible: not root.started and not root.game_over and not root.show_stats
+        opacity: 1 if self.visible else 0
+        padding: dp(20)
+        spacing: dp(10)
         
         Label:
             text: "FLAPPY FASO"
@@ -165,29 +174,79 @@ kv = '''
             outline_color: 0,0,0,1
             size_hint_y: 0.4
         
-        Label:
-            text: root.rank_title
-            font_size: '28sp'
-            color: 0, 1, 0, 1
+        # BOUTON STATS (NOUVEAU !)
+        Button:
+            text: "📊 MON PROFIL & STATS"
+            size_hint_y: 0.15
+            background_color: 0, 0.5, 1, 1
+            font_size: '20sp'
             bold: True
-            size_hint_y: 0.1
-            outline_width: 1
-            outline_color: 0,0,0,1
-        
-        Label:
-            text: "XP TOTAL: " + str(int(root.display_xp))
-            font_size: '22sp'
-            color: 1, 1, 1, 0.9
-            size_hint_y: 0.1
-            bold: True
-
+            on_release: root.toggle_stats()
+            
         Label:
             text: "Taper pour jouer"
             font_size: '25sp'
             bold: True
-            size_hint_y: 0.4
+            size_hint_y: 0.45
             outline_width: 1
             outline_color: 0,0,0,1
+
+    # --- ECRAN STATS (NOUVEAU !!) ---
+    BoxLayout:
+        orientation: 'vertical'
+        size_hint: 0.9, 0.7
+        pos_hint: {'center_x': 0.5, 'center_y': 0.5}
+        visible: root.show_stats
+        opacity: 1 if root.show_stats else 0
+        canvas.before:
+            Color:
+                rgba: 0.1, 0.1, 0.1, 0.95
+            RoundedRectangle:
+                pos: self.pos
+                size: self.size
+                radius: [20,]
+            Color:
+                rgba: 1, 1, 1, 1
+            Line:
+                rounded_rectangle: (self.x, self.y, self.width, self.height, 20)
+                width: 1.5
+        
+        Label:
+            text: "PROFIL JOUEUR"
+            font_size: '30sp'
+            bold: True
+            color: 1, 0.8, 0, 1
+            size_hint_y: 0.2
+
+        Label:
+            text: "RANG ACTUEL: " + root.rank_title
+            font_size: '22sp'
+            bold: True
+            color: 0, 1, 0, 1
+            size_hint_y: 0.15
+
+        Label:
+            text: "XP TOTAL: " + str(int(root.total_xp))
+            font_size: '20sp'
+            size_hint_y: 0.15
+            
+        Label:
+            text: "MEILLEUR SCORE: " + str(root.high_score)
+            font_size: '20sp'
+            color: 0.5, 0.8, 1, 1
+            size_hint_y: 0.15
+
+        Label:
+            text: root.next_rank_text
+            font_size: '16sp'
+            color: 0.7, 0.7, 0.7, 1
+            size_hint_y: 0.15
+
+        Button:
+            text: "FERMER"
+            size_hint_y: 0.2
+            background_color: 1, 0, 0, 1
+            on_release: root.toggle_stats()
 
     # --- GAME OVER ---
     BoxLayout:
@@ -289,15 +348,20 @@ class Pipe(Widget):
         self.width = dp(75)
         self.scored = False
     
-    def set_height(self, h):
-        # --- REGLAGE 3: REDUCTION DU DECALAGE EXAGERÉ ---
-        # On augmente le 'floor' (plancher) à 100 au lieu de 50
-        # Ça oblige les tuyaux à rester plus au centre
+    def set_height(self, h, last_y=None):
         floor = dp(100) 
-        avail = h - self.gap - (floor*2)
-        if avail < 50: avail = 50
-        rand = random.randint(0, int(avail))
-        self.bottom_h = floor + rand
+        max_h = h - floor - self.gap
+        min_h = floor
+        
+        if last_y is None:
+            self.bottom_h = h / 2 - (self.gap / 2)
+        else:
+            variation = random.randint(int(-dp(150)), int(dp(150)))
+            new_h = last_y + variation
+            if new_h < min_h: new_h = min_h + dp(20)
+            if new_h > max_h: new_h = max_h - dp(20)
+            self.bottom_h = new_h
+
         self.top_y = self.bottom_h + self.gap
         self.top_h = h - self.top_y
 
@@ -308,9 +372,12 @@ class FlappyGame(FloatLayout):
     score = NumericProperty(0)
     high_score = NumericProperty(0)
     total_xp = NumericProperty(0)
-    display_xp = NumericProperty(0)
+    
+    # GESTION DES ECRANS
+    show_stats = BooleanProperty(False)
     
     rank_title = StringProperty("NOVICE")
+    next_rank_text = StringProperty("") # Prochain objectif
     medal_text = StringProperty("")
     medal_color = ListProperty([1, 1, 1, 1])
     
@@ -335,12 +402,15 @@ class FlappyGame(FloatLayout):
     music = ObjectProperty(None)
     
     store = None
+    last_pipe_y = NumericProperty(0)
     
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.generate_flag_bg()
-        self.pipe_tex_red = self.gen_pipe_tex((239, 43, 45))
-        self.pipe_tex_green = self.gen_pipe_tex((0, 158, 73))
+        
+        # GENERATION DES TEXTURES 3D !!!
+        self.pipe_tex_red = self.gen_3d_pipe_tex((239, 43, 45))
+        self.pipe_tex_green = self.gen_3d_pipe_tex((0, 158, 73))
         
         create_sounds()
         try:
@@ -362,7 +432,6 @@ class FlappyGame(FloatLayout):
             self.high_score = data.get('best', 0)
             self.total_xp = data.get('xp', 0)
         self.update_rank()
-        self.animate_xp()
 
         Clock.schedule_interval(self.update, 1.0/60.0)
         self.spawn_timer = 0
@@ -371,18 +440,36 @@ class FlappyGame(FloatLayout):
     def init_star(self, dt):
         if self.bg_star: self.bg_star.center_x = self.width / 2
 
-    def animate_xp(self):
-        self.display_xp = 0
-        anim = Animation(display_xp=self.total_xp, duration=1.5, t='out_expo')
-        anim.start(self)
+    def toggle_stats(self):
+        # OUVRE OU FERME L'ONGLET STATS
+        self.show_stats = not self.show_stats
 
     def update_rank(self):
-        if self.total_xp < 50: self.rank_title = "NOVICE"
-        elif self.total_xp < 200: self.rank_title = "APPRENTI"
-        elif self.total_xp < 500: self.rank_title = "CITOYEN"
-        elif self.total_xp < 1000: self.rank_title = "PATRIOTE"
-        elif self.total_xp < 5000: self.rank_title = "ÉTALON"
-        else: self.rank_title = "LÉGENDE DU FASO 👑"
+        target = 0
+        if self.total_xp < 50: 
+            self.rank_title = "NOVICE"
+            target = 50
+        elif self.total_xp < 200: 
+            self.rank_title = "APPRENTI"
+            target = 200
+        elif self.total_xp < 500: 
+            self.rank_title = "CITOYEN"
+            target = 500
+        elif self.total_xp < 1000: 
+            self.rank_title = "PATRIOTE"
+            target = 1000
+        elif self.total_xp < 5000: 
+            self.rank_title = "ÉTALON"
+            target = 5000
+        else: 
+            self.rank_title = "LÉGENDE DU FASO 👑"
+            target = 999999
+
+        if target < 999999:
+            reste = target - self.total_xp
+            self.next_rank_text = f"Plus que {reste} XP pour monter en grade !"
+        else:
+            self.next_rank_text = "Niveau Maximum atteint !"
 
     def save_data(self):
         if self.score > self.high_score:
@@ -416,16 +503,27 @@ class FlappyGame(FloatLayout):
         anim = Animation(opacity=0.6, duration=0.05) + Animation(opacity=0, duration=0.15)
         anim.start(self.flash_layer)
 
-    def gen_pipe_tex(self, color):
+    # --- NOUVELLE FONCTION: TEXTURE "FAUX 3D" ---
+    def gen_3d_pipe_tex(self, color):
         tex = Texture.create(size=(32, 1), colorfmt='rgb')
         buf = []
         r, g, b = color
         for i in range(32):
-            factor = 1.0
-            if i < 5: factor = 0.6 + (i*0.08)
-            elif i > 25: factor = 1.0 - ((i-25)*0.1)
-            buf.extend([int(r*factor), int(g*factor), int(b*factor)])
+            # Simulation d'un cylindre avec la lumière
+            # Le bord est sombre (0.6), le centre gauche est brillant (1.1), le bord droit sombre
+            rel_x = i / 32.0
+            light = 0.6 + 0.5 * math.sin(rel_x * math.pi) 
+            
+            # Un petit reflet "plastique" brillant sur la gauche
+            if 6 <= i <= 9: light += 0.3
+            
+            # On limite la lumière à 1.0 max (pas plus blanc que blanc)
+            if light > 1.0: light = 1.0
+            
+            buf.extend([int(r*light), int(g*light), int(b*light)])
+            
         tex.blit_buffer(bytes(buf), colorfmt='rgb', bufferfmt='ubyte')
+        tex.mag_filter = 'nearest' # Garde le côté pixel art rétro
         return tex
 
     def generate_flag_bg(self):
@@ -439,6 +537,10 @@ class FlappyGame(FloatLayout):
         self.bg_texture = tex
 
     def on_touch_down(self, touch):
+        # Si on clique sur le bouton stats, on ne joue pas
+        if self.show_stats:
+            return super().on_touch_down(touch)
+
         if self.game_over:
              return super().on_touch_down(touch)
              
@@ -447,8 +549,11 @@ class FlappyGame(FloatLayout):
             self.sound_flap.play()
 
         if not self.started:
-            self.started = True
-            self.velocity = dp(400)
+            # Ne pas démarrer si on clique sur le bouton "Profil"
+            # On vérifie si le clic est en haut de l'écran (zone bouton)
+            if touch.y < self.height * 0.7:
+                self.started = True
+                self.velocity = dp(400)
         else:
             self.velocity = dp(400)
 
@@ -461,21 +566,26 @@ class FlappyGame(FloatLayout):
         self.score = 0
         self.game_over = False
         self.started = False
-        # VITESSE DE DEPART PLUS RAPIDE (240 au lieu de 200)
         self.game_speed = dp(240)
+        self.last_pipe_y = 0 
         if self.bg_star: self.bg_star.center_x = self.width / 2
-        self.animate_xp()
 
     def spawn_pipe(self):
         p = Pipe(tex_top=self.pipe_tex_red, tex_bot=self.pipe_tex_green)
-        p.set_height(self.height)
+        
+        if len(self.pipes) > 0:
+            last = self.last_pipe_y
+            p.set_height(self.height, last_y=last)
+        else:
+            p.set_height(self.height)
+            
+        self.last_pipe_y = p.bottom_h
+        
         p.x = self.width
         self.pipe_layer.add_widget(p)
         self.pipes.append(p)
 
     def update(self, dt):
-        # --- REGLAGE 2: ACCELERATION PLUS FORTE ---
-        # Depart 240, et +8 par point (ça va chauffer !)
         target_speed = dp(240) + (self.score * dp(8))
         if target_speed > dp(500): target_speed = dp(500)
         self.game_speed = target_speed
@@ -493,8 +603,6 @@ class FlappyGame(FloatLayout):
         
         self.spawn_timer += dt
         
-        # --- REGLAGE 1: FREQUENCE DE SPAWN ---
-        # 1.3 sec au lieu de 1.8. Tuyaux beaucoup plus rapprochés.
         required_time = 1.3 * (dp(240) / self.game_speed) 
         
         if self.spawn_timer > required_time:
@@ -516,7 +624,6 @@ class FlappyGame(FloatLayout):
                 self.pipe_layer.remove_widget(p)
                 self.pipes.remove(p)
             
-            # Hitbox réduite (Conservée de la V33)
             hit_margin = dp(15) 
             if (self.bird.right - hit_margin > p.x and self.bird.x + hit_margin < p.right):
                 if (self.bird.y + hit_margin < p.bottom_h) or (self.bird.top - hit_margin > p.top_y):
