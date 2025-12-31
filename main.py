@@ -21,8 +21,9 @@ from kivy.metrics import dp
 from kivy.graphics.texture import Texture
 from kivy.core.audio import SoundLoader
 
-# --- GÉNÉRATEUR DE SONS ---
+# --- GÉNÉRATEUR DE SONS (Sauf pour flap.wav qui est importé) ---
 def create_sounds():
+    # On garde la génération pour le score et crash SI ils n'existent pas
     if not os.path.exists('score.wav'):
         with wave.open('score.wav', 'w') as f:
             f.setparams((1, 2, 44100, 0, 'NONE', 'not compressed'))
@@ -33,16 +34,8 @@ def create_sounds():
                 data.append(struct.pack('h', int(v * 32767)))
             f.writeframes(b''.join(data))
 
-    if not os.path.exists('flap.wav'):
-        with wave.open('flap.wav', 'w') as f:
-            f.setparams((1, 2, 44100, 0, 'NONE', 'not compressed'))
-            data = []
-            for i in range(int(44100 * 0.1)):
-                freq = 600 - (i / (44100 * 0.1)) * 400 
-                vol = 0.4 * (1 - (i / (44100 * 0.1)))
-                v = math.sin(2 * math.pi * freq * (i / 44100.0)) * vol
-                data.append(struct.pack('h', int(v * 32767)))
-            f.writeframes(b''.join(data))
+    # NOTE : J'AI RETIRÉ LA GÉNÉRATION DE 'flap.wav' 
+    # Le jeu va chercher TON fichier importé.
 
     if not os.path.exists('crash.wav'):
         with wave.open('crash.wav', 'w') as f:
@@ -119,7 +112,6 @@ kv = '''
     canvas.after:
         PopMatrix
 
-# --- EFFET FLASH (FEEDBACK VISUEL) ---
 <Flash>:
     size_hint: 1, 1
     opacity: 0
@@ -158,17 +150,17 @@ kv = '''
         pos: dp(100), root.height / 2
         opacity: 1 if root.started else 0
 
-    # FLASH BLANC QUAND ON MARQUE
     Flash:
         id: flash_layer
 
-    # --- ACCUEIL ---
+    # --- ACCUEIL (ANIMÉ) ---
     BoxLayout:
         orientation: 'vertical'
         size_hint: 1, 1
         visible: not root.started and not root.game_over
         opacity: 1 if (not root.started and not root.game_over) else 0
         
+        # TITRE QUI RESPIRE (Pulse)
         Label:
             text: "FLAPPY FASO"
             font_size: '50sp'
@@ -177,22 +169,25 @@ kv = '''
             outline_width: 3
             outline_color: 0,0,0,1
             size_hint_y: 0.4
+            id: title_label
         
-        # AFFICHAGE DU RANG
+        # RANG (Couleur animée)
         Label:
             text: root.rank_title
-            font_size: '25sp'
+            font_size: '28sp'
             color: 0, 1, 0, 1
             bold: True
             size_hint_y: 0.1
             outline_width: 1
             outline_color: 0,0,0,1
         
+        # XP ANIMÉ (Compteur)
         Label:
-            text: "Total XP: " + str(root.total_xp)
-            font_size: '20sp'
-            color: 1, 1, 1, 0.8
+            text: "XP TOTAL: " + str(int(root.display_xp))
+            font_size: '22sp'
+            color: 1, 1, 1, 0.9
             size_hint_y: 0.1
+            bold: True
 
         Label:
             text: "Taper pour jouer"
@@ -201,8 +196,9 @@ kv = '''
             size_hint_y: 0.4
             outline_width: 1
             outline_color: 0,0,0,1
+            id: tap_label
 
-    # --- GAME OVER (AVEC MEDAILLES) ---
+    # --- GAME OVER ---
     BoxLayout:
         orientation: 'vertical'
         size_hint: 0.8, 0.5
@@ -224,7 +220,6 @@ kv = '''
             color: 1, 0, 0, 1
             size_hint_y: 0.2
             
-        # MEDAILLE
         Label:
             text: root.medal_icon
             font_size: '60sp'
@@ -313,9 +308,11 @@ class Bird(Widget):
 class FlappyGame(FloatLayout):
     score = NumericProperty(0)
     high_score = NumericProperty(0)
-    total_xp = NumericProperty(0) # XP CUMULÉ
-    rank_title = StringProperty("Touriste") # TITRE DU JOUEUR
-    medal_icon = StringProperty("") # MEDAILLE FINALE
+    total_xp = NumericProperty(0)
+    display_xp = NumericProperty(0) # VARIABLE ANIMÉE
+    
+    rank_title = StringProperty("Touriste")
+    medal_icon = StringProperty("")
     
     started = BooleanProperty(False)
     game_over = BooleanProperty(False)
@@ -348,22 +345,26 @@ class FlappyGame(FloatLayout):
         create_sounds()
         try:
             self.sound_score = SoundLoader.load('score.wav')
-            self.sound_flap = SoundLoader.load('flap.wav')
+            # CHARGEMENT DU SON IMPORTÉ
+            self.sound_flap = SoundLoader.load('flap.wav') 
             self.sound_crash = SoundLoader.load('crash.wav')
             self.music = SoundLoader.load('music.wav')
             if self.music: 
                 self.music.loop = True
                 self.music.volume = 0.5
                 self.music.play() 
-        except: pass
+        except: 
+            print("Erreur sons")
 
-        # CHARGEMENT SAUVEGARDE (XP + BEST)
         self.store = JsonStore('game_data.json')
         if self.store.exists('stats'):
             data = self.store.get('stats')
             self.high_score = data.get('best', 0)
             self.total_xp = data.get('xp', 0)
         self.update_rank()
+        
+        # ANIMATION DE DÉMARRAGE (XP qui compte)
+        self.animate_xp()
 
         Clock.schedule_interval(self.update, 1.0/60.0)
         self.spawn_timer = 0
@@ -372,8 +373,13 @@ class FlappyGame(FloatLayout):
     def init_star(self, dt):
         if self.bg_star: self.bg_star.center_x = self.width / 2
 
+    def animate_xp(self):
+        # L'XP part de 0 et monte vers le vrai total en 1.5 secondes
+        self.display_xp = 0
+        anim = Animation(display_xp=self.total_xp, duration=1.5, t='out_expo')
+        anim.start(self)
+
     def update_rank(self):
-        # SYSTEME DE RANGS (Addictif !)
         if self.total_xp < 50: self.rank_title = "Touriste"
         elif self.total_xp < 200: self.rank_title = "Apprenti"
         elif self.total_xp < 500: self.rank_title = "Citoyen"
@@ -382,14 +388,11 @@ class FlappyGame(FloatLayout):
         else: self.rank_title = "LÉGENDE DU FASO 👑"
 
     def save_data(self):
-        # On sauvegarde le record ET l'XP total
         if self.score > self.high_score:
             self.high_score = self.score
         
-        # On ajoute le score de cette partie à l'XP total
         self.total_xp += self.score
         self.update_rank()
-        
         self.store.put('stats', best=self.high_score, xp=self.total_xp)
 
     def trigger_game_over(self):
@@ -397,17 +400,15 @@ class FlappyGame(FloatLayout):
             self.game_over = True
             if self.sound_crash: self.sound_crash.play()
             
-            # ATTRIBUTION MEDAILLE
-            if self.score >= 100: self.medal_icon = "💎" # Diamant
-            elif self.score >= 50: self.medal_icon = "🥇" # Or
-            elif self.score >= 20: self.medal_icon = "🥈" # Argent
-            elif self.score >= 10: self.medal_icon = "🥉" # Bronze
-            else: self.medal_icon = "💪" # Courage
+            if self.score >= 100: self.medal_icon = "💎"
+            elif self.score >= 50: self.medal_icon = "🥇"
+            elif self.score >= 20: self.medal_icon = "🥈"
+            elif self.score >= 10: self.medal_icon = "🥉"
+            else: self.medal_icon = "💪"
             
             self.save_data()
 
     def do_flash(self):
-        # Petit flash blanc satisfaisant
         anim = Animation(opacity=0.6, duration=0.05) + Animation(opacity=0, duration=0.15)
         anim.start(self.flash_layer)
 
@@ -458,6 +459,9 @@ class FlappyGame(FloatLayout):
         self.started = False
         self.game_speed = dp(200)
         if self.bg_star: self.bg_star.center_x = self.width / 2
+        
+        # ON RELANCE L'ANIMATION DE L'XP QUAND ON REVIENT AU MENU
+        self.animate_xp()
 
     def spawn_pipe(self):
         p = Pipe(tex_top=self.pipe_tex_red, tex_bot=self.pipe_tex_green)
@@ -467,12 +471,10 @@ class FlappyGame(FloatLayout):
         self.pipes.append(p)
 
     def update(self, dt):
-        # VITESSE PROGRESSIVE
         target_speed = dp(200) + (self.score * dp(5))
         if target_speed > dp(450): target_speed = dp(450)
         self.game_speed = target_speed
 
-        # ANIMATION ETOILE
         if self.bg_star and self.started and not self.game_over:
             self.bg_star.x -= (self.game_speed * 0.3) * dt
             if self.bg_star.right < 0:
@@ -496,10 +498,7 @@ class FlappyGame(FloatLayout):
             if p.right < self.bird.x and not p.scored:
                 self.score += 1
                 p.scored = True
-                
-                # --- EFFET FLASH ---
                 self.do_flash()
-                
                 if self.sound_score:
                     if self.sound_score.state == 'play': self.sound_score.stop()
                     self.sound_score.play()
@@ -522,3 +521,4 @@ class FlappyApp(App):
 
 if __name__ == '__main__':
     FlappyApp().run()
+        
