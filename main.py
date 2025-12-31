@@ -288,8 +288,12 @@ class Pipe(Widget):
         super().__init__(**kwargs)
         self.width = dp(75)
         self.scored = False
+    
     def set_height(self, h):
-        floor = dp(50)
+        # --- REGLAGE 3: REDUCTION DU DECALAGE EXAGERÉ ---
+        # On augmente le 'floor' (plancher) à 100 au lieu de 50
+        # Ça oblige les tuyaux à rester plus au centre
+        floor = dp(100) 
         avail = h - self.gap - (floor*2)
         if avail < 50: avail = 50
         rand = random.randint(0, int(avail))
@@ -341,12 +345,8 @@ class FlappyGame(FloatLayout):
         create_sounds()
         try:
             self.sound_score = SoundLoader.load('score.wav')
-            
-            # --- MODIF AUDIO : VOLUME RÉDUIT ---
             self.sound_flap = SoundLoader.load('flap.wav') 
-            if self.sound_flap:
-                self.sound_flap.volume = 0.4 # Volume à 40% (Plus doux)
-
+            if self.sound_flap: self.sound_flap.volume = 0.4 
             self.sound_crash = SoundLoader.load('crash.wav')
             self.music = SoundLoader.load('music.wav')
             if self.music: 
@@ -461,7 +461,8 @@ class FlappyGame(FloatLayout):
         self.score = 0
         self.game_over = False
         self.started = False
-        self.game_speed = dp(200)
+        # VITESSE DE DEPART PLUS RAPIDE (240 au lieu de 200)
+        self.game_speed = dp(240)
         if self.bg_star: self.bg_star.center_x = self.width / 2
         self.animate_xp()
 
@@ -473,8 +474,10 @@ class FlappyGame(FloatLayout):
         self.pipes.append(p)
 
     def update(self, dt):
-        target_speed = dp(200) + (self.score * dp(5))
-        if target_speed > dp(450): target_speed = dp(450)
+        # --- REGLAGE 2: ACCELERATION PLUS FORTE ---
+        # Depart 240, et +8 par point (ça va chauffer !)
+        target_speed = dp(240) + (self.score * dp(8))
+        if target_speed > dp(500): target_speed = dp(500)
         self.game_speed = target_speed
 
         if self.bg_star and self.started and not self.game_over:
@@ -489,7 +492,11 @@ class FlappyGame(FloatLayout):
         self.bird.angle = max(min(self.velocity * 0.15, 30), -60)
         
         self.spawn_timer += dt
-        required_time = 1.8 * (dp(200) / self.game_speed) 
+        
+        # --- REGLAGE 1: FREQUENCE DE SPAWN ---
+        # 1.3 sec au lieu de 1.8. Tuyaux beaucoup plus rapprochés.
+        required_time = 1.3 * (dp(240) / self.game_speed) 
+        
         if self.spawn_timer > required_time:
             self.spawn_pipe()
             self.spawn_timer = 0
@@ -509,7 +516,7 @@ class FlappyGame(FloatLayout):
                 self.pipe_layer.remove_widget(p)
                 self.pipes.remove(p)
             
-            # --- COLLISION V33 AVEC MARGE ---
+            # Hitbox réduite (Conservée de la V33)
             hit_margin = dp(15) 
             if (self.bird.right - hit_margin > p.x and self.bird.x + hit_margin < p.right):
                 if (self.bird.y + hit_margin < p.bottom_h) or (self.bird.top - hit_margin > p.top_y):
@@ -525,3 +532,4 @@ class FlappyApp(App):
 
 if __name__ == '__main__':
     FlappyApp().run()
+                
