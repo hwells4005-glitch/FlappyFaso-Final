@@ -6,6 +6,12 @@ import os
 from kivy.config import Config
 from kivy.storage.jsonstore import JsonStore
 from kivy.animation import Animation
+from kivy.core.window import Window
+
+# --- CONFIGURATION ADMOB (Mets tes codes ici plus tard) ---
+ADMOB_APP_ID = "ca-app-pub-3940256099942544~3347511713" # ID de TEST Google
+ADMOB_BANNER_ID = "ca-app-pub-3940256099942544/6300978111" # ID de TEST Google
+USE_ADMOB = True # Mettre à False si ça plante
 
 # Optimisation
 Config.set('graphics', 'resizable', '0')
@@ -13,7 +19,6 @@ Config.set('kivy', 'exit_on_escape', '1')
 
 from kivy.app import App
 from kivy.uix.floatlayout import FloatLayout
-from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.widget import Widget
 from kivy.clock import Clock
 from kivy.lang import Builder
@@ -22,7 +27,15 @@ from kivy.metrics import dp
 from kivy.graphics.texture import Texture
 from kivy.core.audio import SoundLoader
 
-# --- GÉNÉRATEUR DE SONS (Sauf flap.wav) ---
+# TENTATIVE D'IMPORT KIVMOB (Pour les pubs)
+try:
+    from kivmob import KivMob, TestIds
+    kivmob_available = True
+except:
+    kivmob_available = False
+    print("KivMob non installé ou non supporté sur PC")
+
+# --- GÉNÉRATEUR DE SONS ---
 def create_sounds():
     if not os.path.exists('score.wav'):
         with wave.open('score.wav', 'w') as f:
@@ -62,7 +75,6 @@ kv = '''
 
 <FasoStar>:
     canvas:
-        # ETOILE AU PREMIER PLAN (COULEUR VIVE)
         Color:
             rgba: 1, 0.84, 0, 1 
         Mesh:
@@ -120,12 +132,29 @@ kv = '''
             pos: self.pos
             size: self.size
 
+<IntroScreen>:
+    size_hint: 1, 1
+    canvas.before:
+        Color:
+            rgba: 0, 0, 0, 1 # Fond noir
+        Rectangle:
+            pos: self.pos
+            size: self.size
+    
+    # LOGO ANIMÉ
+    Image:
+        source: 'logo.png' # TON IMAGE FASO LAB
+        size_hint: 0.6, 0.6
+        pos_hint: {'center_x': 0.5, 'center_y': 0.5}
+        id: logo_img
+        opacity: 0 # Commence invisible pour le fade in
+
 <FlappyGame>:
     pipe_layer: pipe_layer
     bird: bird
     flash_layer: flash_layer
+    intro_layer: intro_layer
     
-    # 1. FOND (DRAPEAU) - Tout au fond
     canvas.before:
         Color:
             rgba: 1, 1, 1, 1
@@ -134,7 +163,6 @@ kv = '''
             size: self.size
             texture: self.bg_texture
     
-    # 2. ETOILE (Juste au dessus du fond, mais derrière les tuyaux)
     FasoStar:
         id: bg_star
         size_hint: None, None
@@ -142,17 +170,14 @@ kv = '''
         center_y: root.height / 2
         opacity: 0.9 if not root.started else 0.5
 
-    # 3. TUYAUX
     Widget:
         id: pipe_layer
 
-    # 4. OISEAU
     Bird:
         id: bird
         pos: dp(100), root.height / 2
         opacity: 1 if root.started else 0
 
-    # 5. EFFETS ET UI
     Flash:
         id: flash_layer
 
@@ -160,7 +185,7 @@ kv = '''
     BoxLayout:
         orientation: 'vertical'
         size_hint: 1, 1
-        visible: not root.started and not root.game_over and not root.show_stats
+        visible: not root.started and not root.game_over and not root.show_stats and not root.in_intro
         opacity: 1 if self.visible else 0
         padding: dp(20)
         spacing: dp(10)
@@ -174,9 +199,8 @@ kv = '''
             outline_color: 0,0,0,1
             size_hint_y: 0.4
         
-        # BOUTON STATS (NOUVEAU !)
         Button:
-            text: "📊 MON PROFIL & STATS"
+            text: "MON PROFIL & STATS" # J'ai retiré l'émoji buggé
             size_hint_y: 0.15
             background_color: 0, 0.5, 1, 1
             font_size: '20sp'
@@ -191,7 +215,7 @@ kv = '''
             outline_width: 1
             outline_color: 0,0,0,1
 
-    # --- ECRAN STATS (NOUVEAU !!) ---
+    # --- ECRAN STATS ---
     BoxLayout:
         orientation: 'vertical'
         size_hint: 0.9, 0.7
@@ -307,9 +331,18 @@ kv = '''
         outline_width: 2
         outline_color: 0,0,0,1
         opacity: 1 if root.started and not root.game_over else 0
+
+    # --- ECRAN INTRO (AU DESSUS DE TOUT) ---
+    IntroScreen:
+        id: intro_layer
+        opacity: 1 if root.in_intro else 0
+        visible: root.in_intro
 '''
 
 class Flash(Widget):
+    pass
+
+class IntroScreen(FloatLayout):
     pass
 
 class FasoStar(Widget):
@@ -373,11 +406,11 @@ class FlappyGame(FloatLayout):
     high_score = NumericProperty(0)
     total_xp = NumericProperty(0)
     
-    # GESTION DES ECRANS
     show_stats = BooleanProperty(False)
+    in_intro = BooleanProperty(True) # COMMENCE PAR L'INTRO
     
     rank_title = StringProperty("NOVICE")
-    next_rank_text = StringProperty("") # Prochain objectif
+    next_rank_text = StringProperty("") 
     medal_text = StringProperty("")
     medal_color = ListProperty([1, 1, 1, 1])
     
@@ -391,6 +424,7 @@ class FlappyGame(FloatLayout):
     bird = ObjectProperty(None)
     pipe_layer = ObjectProperty(None)
     flash_layer = ObjectProperty(None)
+    intro_layer = ObjectProperty(None)
     bg_texture = ObjectProperty(None)
     pipe_tex_red = ObjectProperty(None)
     pipe_tex_green = ObjectProperty(None)
@@ -404,11 +438,11 @@ class FlappyGame(FloatLayout):
     store = None
     last_pipe_y = NumericProperty(0)
     
+    ads = None
+    
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.generate_flag_bg()
-        
-        # GENERATION DES TEXTURES 3D !!!
         self.pipe_tex_red = self.gen_3d_pipe_tex((239, 43, 45))
         self.pipe_tex_green = self.gen_3d_pipe_tex((0, 158, 73))
         
@@ -432,16 +466,41 @@ class FlappyGame(FloatLayout):
             self.high_score = data.get('best', 0)
             self.total_xp = data.get('xp', 0)
         self.update_rank()
+        
+        # --- LANCEMENT INTRO ---
+        Clock.schedule_once(self.start_intro, 0.5)
 
         Clock.schedule_interval(self.update, 1.0/60.0)
         self.spawn_timer = 0
         Clock.schedule_once(self.init_star, 0.1)
 
+    def init_ads(self):
+        # INITIALISATION PUBS
+        if kivmob_available and USE_ADMOB:
+            self.ads = KivMob(ADMOB_APP_ID)
+            self.ads.new_banner(ADMOB_BANNER_ID, top_pos=False) # Pub en bas
+            self.ads.request_banner()
+            self.ads.show_banner()
+
+    def start_intro(self, dt):
+        # Animation: Logo apparaît doucement
+        if self.intro_layer:
+            logo = self.intro_layer.ids.logo_img
+            anim = Animation(opacity=1, duration=1.5) + Animation(opacity=1, duration=1.0) + Animation(opacity=0, duration=0.5)
+            anim.bind(on_complete=self.end_intro)
+            anim.start(logo)
+
+    def end_intro(self, *args):
+        self.in_intro = False # Fin intro, affiche menu
+        # On lance les pubs après l'intro
+        try:
+            self.init_ads()
+        except: pass
+
     def init_star(self, dt):
         if self.bg_star: self.bg_star.center_x = self.width / 2
 
     def toggle_stats(self):
-        # OUVRE OU FERME L'ONGLET STATS
         self.show_stats = not self.show_stats
 
     def update_rank(self):
@@ -503,27 +562,18 @@ class FlappyGame(FloatLayout):
         anim = Animation(opacity=0.6, duration=0.05) + Animation(opacity=0, duration=0.15)
         anim.start(self.flash_layer)
 
-    # --- NOUVELLE FONCTION: TEXTURE "FAUX 3D" ---
     def gen_3d_pipe_tex(self, color):
         tex = Texture.create(size=(32, 1), colorfmt='rgb')
         buf = []
         r, g, b = color
         for i in range(32):
-            # Simulation d'un cylindre avec la lumière
-            # Le bord est sombre (0.6), le centre gauche est brillant (1.1), le bord droit sombre
             rel_x = i / 32.0
             light = 0.6 + 0.5 * math.sin(rel_x * math.pi) 
-            
-            # Un petit reflet "plastique" brillant sur la gauche
             if 6 <= i <= 9: light += 0.3
-            
-            # On limite la lumière à 1.0 max (pas plus blanc que blanc)
             if light > 1.0: light = 1.0
-            
             buf.extend([int(r*light), int(g*light), int(b*light)])
-            
         tex.blit_buffer(bytes(buf), colorfmt='rgb', bufferfmt='ubyte')
-        tex.mag_filter = 'nearest' # Garde le côté pixel art rétro
+        tex.mag_filter = 'nearest' 
         return tex
 
     def generate_flag_bg(self):
@@ -537,8 +587,7 @@ class FlappyGame(FloatLayout):
         self.bg_texture = tex
 
     def on_touch_down(self, touch):
-        # Si on clique sur le bouton stats, on ne joue pas
-        if self.show_stats:
+        if self.show_stats or self.in_intro:
             return super().on_touch_down(touch)
 
         if self.game_over:
@@ -549,8 +598,7 @@ class FlappyGame(FloatLayout):
             self.sound_flap.play()
 
         if not self.started:
-            # Ne pas démarrer si on clique sur le bouton "Profil"
-            # On vérifie si le clic est en haut de l'écran (zone bouton)
+            # Check si clic bouton stats
             if touch.y < self.height * 0.7:
                 self.started = True
                 self.velocity = dp(400)
@@ -572,15 +620,12 @@ class FlappyGame(FloatLayout):
 
     def spawn_pipe(self):
         p = Pipe(tex_top=self.pipe_tex_red, tex_bot=self.pipe_tex_green)
-        
         if len(self.pipes) > 0:
             last = self.last_pipe_y
             p.set_height(self.height, last_y=last)
         else:
             p.set_height(self.height)
-            
         self.last_pipe_y = p.bottom_h
-        
         p.x = self.width
         self.pipe_layer.add_widget(p)
         self.pipes.append(p)
@@ -602,41 +647,7 @@ class FlappyGame(FloatLayout):
         self.bird.angle = max(min(self.velocity * 0.15, 30), -60)
         
         self.spawn_timer += dt
-        
         required_time = 1.3 * (dp(240) / self.game_speed) 
-        
         if self.spawn_timer > required_time:
             self.spawn_pipe()
-            self.spawn_timer = 0
-            
-        for p in self.pipes[:]:
-            p.x -= self.game_speed * dt
-            
-            if p.right < self.bird.x and not p.scored:
-                self.score += 1
-                p.scored = True
-                self.do_flash()
-                if self.sound_score:
-                    if self.sound_score.state == 'play': self.sound_score.stop()
-                    self.sound_score.play()
-            
-            if p.right < 0:
-                self.pipe_layer.remove_widget(p)
-                self.pipes.remove(p)
-            
-            hit_margin = dp(15) 
-            if (self.bird.right - hit_margin > p.x and self.bird.x + hit_margin < p.right):
-                if (self.bird.y + hit_margin < p.bottom_h) or (self.bird.top - hit_margin > p.top_y):
-                    self.trigger_game_over()
-                    
-        if self.bird.y < 0 or self.bird.top > self.height:
-            self.trigger_game_over()
-
-class FlappyApp(App):
-    def build(self):
-        Builder.load_string(kv)
-        return FlappyGame()
-
-if __name__ == '__main__':
-    FlappyApp().run()
-                
+            self.
