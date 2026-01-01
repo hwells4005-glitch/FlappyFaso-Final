@@ -1,31 +1,73 @@
 [app]
-# 1. IDENTITÉ
+
+# (str) Title of your application
 title = Flappy Faso
+
+# (str) Package name
 package.name = flappyfaso
+
+# (str) Package domain (needed for android/ios packaging)
 package.domain = org.faso
+
+# (str) Source code where the main.py live
 source.dir = .
+
+# (str) Source files to include (let empty to include all the files)
+# IMPORTANT : J'ai ajouté 'wav' pour les sons !
 source.include_exts = py,png,jpg,kv,atlas,wav
 
-version = 2.5
+# (str) Application versioning (method 1)
+version = 3.8
 
-# 2. LES IMAGES (C'est ici que la magie opère !)
-icon.filename = icon.png
+# (list) Application requirements
+# comma separated e.g. requirements = sqlite3,kivy
+# IMPORTANT : J'ai ajouté 'kivmob' pour les pubs !
+requirements = python3,kivy==2.2.0,android,kivmob
+
+# (str) Custom source folders for requirements
+# Sets custom source for any requirements with recipes
+# requirements.source.kivy = ../../kivy
+
+# (str) Presplash of the application
 presplash.filename = presplash.png
 
-# 3. MOTEUR LÉGER (Sans bug)
-requirements = python3,kivy==2.2.0,android
+# (str) Icon of the application
+icon.filename = icon.png
 
-# 4. CONFIGURATION ÉCRAN
+# (str) Supported orientation (landscape, portrait or all)
 orientation = portrait
+
+# (bool) Indicate if the application should be fullscreen or not
 fullscreen = 0
-android.permissions = INTERNET
-android.accept_sdk_license = True
+
+# (list) Permissions
+# IMPORTANT : INTERNET pour les pubs !
+android.permissions = INTERNET, ACCESS_NETWORK_STATE
+
+# (int) Target Android API, should be as high as possible.
 android.api = 33
+
+# (int) Minimum API your APK will support.
 android.minapi = 21
+
+# (list) List of Gradle dependencies to add
+# IMPORTANT : C'est le moteur de pub Google AdMob
+android.gradle_dependencies = com.google.android.gms:play-services-ads:23.0.0
+
+# (str) The Android arch to build for, choices: armeabi-v7a, arm64-v8a, x86, x86_64
 android.archs = arm64-v8a, armeabi-v7a
+
+# (bool) enables Android auto backup feature (Android API >= 23)
 android.allow_backup = True
+
+# (str) python-for-android branch to use, defaults to master
 p4a.branch = master
 
+
 [buildozer]
+
+# (int) Log level (0 = error only, 1 = info, 2 = debug (with command output))
 log_level = 2
+
+# (int) Display warning if buildozer is run as root (0 = False, 1 = True)
 warn_on_root = 1
