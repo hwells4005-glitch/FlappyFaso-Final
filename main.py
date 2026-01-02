@@ -6,14 +6,10 @@ import os
 from kivy.config import Config
 from kivy.storage.jsonstore import JsonStore
 from kivy.animation import Animation
-from kivy.core.window import Window
 
-# --- CONFIGURATION ADMOB (MODE TEST) ---
-# Ce sont les codes officiels de test Google. Ça affichera "Test Ad".
-# Une fois que ça marche, tu mettras les tiens ici.
-ADMOB_APP_ID = "ca-app-pub-3940256099942544~3347511713" 
-ADMOB_BANNER_ID = "ca-app-pub-3940256099942544/6300978111" 
-USE_ADMOB = True 
+# --- MODE SANS ECHEC ---
+USE_ADMOB = False # On désactive les pubs pour tester
+# On désactive aussi l'intro dans le code plus bas
 
 # Optimisation
 Config.set('graphics', 'resizable', '0')
@@ -29,16 +25,9 @@ from kivy.metrics import dp
 from kivy.graphics.texture import Texture
 from kivy.core.audio import SoundLoader
 
-# TENTATIVE D'IMPORT KIVMOB
-try:
-    from kivmob import KivMob, TestIds
-    kivmob_available = True
-except:
-    kivmob_available = False
-    print("KivMob non dispo sur PC (Normal)")
-
-# --- GÉNÉRATEUR DE SONS (Sauf flap.wav qui est importé) ---
+# --- GÉNÉRATEUR DE SONS ---
 def create_sounds():
+    # On recrée les sons de base pour être sûr qu'ils existent
     if not os.path.exists('score.wav'):
         with wave.open('score.wav', 'w') as f:
             f.setparams((1, 2, 44100, 0, 'NONE', 'not compressed'))
@@ -134,28 +123,10 @@ kv = '''
             pos: self.pos
             size: self.size
 
-<IntroScreen>:
-    size_hint: 1, 1
-    canvas.before:
-        Color:
-            rgba: 0, 0, 0, 1 # Fond noir pour l'intro
-        Rectangle:
-            pos: self.pos
-            size: self.size
-    
-    # LOGO FASO LAB
-    Image:
-        source: 'logo.png' 
-        size_hint: 0.6, 0.6
-        pos_hint: {'center_x': 0.5, 'center_y': 0.5}
-        id: logo_img
-        opacity: 0 
-
 <FlappyGame>:
     pipe_layer: pipe_layer
     bird: bird
     flash_layer: flash_layer
-    intro_layer: intro_layer
     
     canvas.before:
         Color:
@@ -183,11 +154,11 @@ kv = '''
     Flash:
         id: flash_layer
 
-    # --- ACCUEIL ---
+    # --- ACCUEIL (SANS INTRO) ---
     BoxLayout:
         orientation: 'vertical'
         size_hint: 1, 1
-        visible: not root.started and not root.game_over and not root.show_stats and not root.in_intro
+        visible: not root.started and not root.game_over and not root.show_stats
         opacity: 1 if self.visible else 0
         padding: dp(20)
         spacing: dp(10)
@@ -201,9 +172,8 @@ kv = '''
             outline_color: 0,0,0,1
             size_hint_y: 0.4
         
-        # BOUTON CORRIGÉ (PLUS DE CARRÉ BLANC)
         Button:
-            text: "MON PROFIL & STATS" 
+            text: "MON PROFIL & STATS"
             size_hint_y: 0.15
             background_color: 0, 0.5, 1, 1
             font_size: '20sp'
@@ -334,18 +304,9 @@ kv = '''
         outline_width: 2
         outline_color: 0,0,0,1
         opacity: 1 if root.started and not root.game_over else 0
-
-    # --- ECRAN INTRO (Démarrage) ---
-    IntroScreen:
-        id: intro_layer
-        opacity: 1 if root.in_intro else 0
-        visible: root.in_intro
 '''
 
 class Flash(Widget):
-    pass
-
-class IntroScreen(FloatLayout):
     pass
 
 class FasoStar(Widget):
@@ -410,7 +371,7 @@ class FlappyGame(FloatLayout):
     total_xp = NumericProperty(0)
     
     show_stats = BooleanProperty(False)
-    in_intro = BooleanProperty(True) # ACTIVE L'INTRO
+    # in_intro = BooleanProperty(False) # DESACTIVÉ POUR LE TEST
     
     rank_title = StringProperty("NOVICE")
     next_rank_text = StringProperty("") 
@@ -427,7 +388,6 @@ class FlappyGame(FloatLayout):
     bird = ObjectProperty(None)
     pipe_layer = ObjectProperty(None)
     flash_layer = ObjectProperty(None)
-    intro_layer = ObjectProperty(None)
     bg_texture = ObjectProperty(None)
     pipe_tex_red = ObjectProperty(None)
     pipe_tex_green = ObjectProperty(None)
@@ -441,8 +401,6 @@ class FlappyGame(FloatLayout):
     store = None
     last_pipe_y = NumericProperty(0)
     
-    ads = None
-    
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.generate_flag_bg()
@@ -452,8 +410,11 @@ class FlappyGame(FloatLayout):
         create_sounds()
         try:
             self.sound_score = SoundLoader.load('score.wav')
-            self.sound_flap = SoundLoader.load('flap.wav') 
-            if self.sound_flap: self.sound_flap.volume = 0.4 
+            # ESSAYE DE CHARGER FLAP.WAV, SINON RIEN
+            if os.path.exists('flap.wav'):
+                self.sound_flap = SoundLoader.load('flap.wav') 
+                if self.sound_flap: self.sound_flap.volume = 0.4
+            
             self.sound_crash = SoundLoader.load('crash.wav')
             self.music = SoundLoader.load('music.wav')
             if self.music: 
@@ -470,30 +431,9 @@ class FlappyGame(FloatLayout):
             self.total_xp = data.get('xp', 0)
         self.update_rank()
         
-        Clock.schedule_once(self.start_intro, 0.5)
         Clock.schedule_interval(self.update, 1.0/60.0)
         self.spawn_timer = 0
         Clock.schedule_once(self.init_star, 0.1)
-
-    def init_ads(self):
-        if kivmob_available and USE_ADMOB:
-            self.ads = KivMob(ADMOB_APP_ID)
-            self.ads.new_banner(ADMOB_BANNER_ID, top_pos=False)
-            self.ads.request_banner()
-            self.ads.show_banner()
-
-    def start_intro(self, dt):
-        if self.intro_layer:
-            logo = self.intro_layer.ids.logo_img
-            anim = Animation(opacity=1, duration=1.5) + Animation(opacity=1, duration=1.0) + Animation(opacity=0, duration=0.5)
-            anim.bind(on_complete=self.end_intro)
-            anim.start(logo)
-
-    def end_intro(self, *args):
-        self.in_intro = False 
-        try:
-            self.init_ads() # LANCE LA PUB APRES L'INTRO
-        except: pass
 
     def init_star(self, dt):
         if self.bg_star: self.bg_star.center_x = self.width / 2
@@ -583,7 +523,7 @@ class FlappyGame(FloatLayout):
         self.bg_texture = tex
 
     def on_touch_down(self, touch):
-        if self.show_stats or self.in_intro:
+        if self.show_stats:
             return super().on_touch_down(touch)
 
         if self.game_over:
@@ -673,3 +613,4 @@ class FlappyApp(App):
 
 if __name__ == '__main__':
     FlappyApp().run()
+                
