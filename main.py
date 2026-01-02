@@ -8,10 +8,12 @@ from kivy.storage.jsonstore import JsonStore
 from kivy.animation import Animation
 from kivy.core.window import Window
 
-# --- CONFIGURATION ADMOB (Mets tes codes ici plus tard) ---
-ADMOB_APP_ID = "ca-app-pub-3940256099942544~3347511713" # ID de TEST Google
-ADMOB_BANNER_ID = "ca-app-pub-3940256099942544/6300978111" # ID de TEST Google
-USE_ADMOB = True # Mettre à False si ça plante
+# --- CONFIGURATION ADMOB (MODE TEST) ---
+# Ce sont les codes officiels de test Google. Ça affichera "Test Ad".
+# Une fois que ça marche, tu mettras les tiens ici.
+ADMOB_APP_ID = "ca-app-pub-3940256099942544~3347511713" 
+ADMOB_BANNER_ID = "ca-app-pub-3940256099942544/6300978111" 
+USE_ADMOB = True 
 
 # Optimisation
 Config.set('graphics', 'resizable', '0')
@@ -27,15 +29,15 @@ from kivy.metrics import dp
 from kivy.graphics.texture import Texture
 from kivy.core.audio import SoundLoader
 
-# TENTATIVE D'IMPORT KIVMOB (Pour les pubs)
+# TENTATIVE D'IMPORT KIVMOB
 try:
     from kivmob import KivMob, TestIds
     kivmob_available = True
 except:
     kivmob_available = False
-    print("KivMob non installé ou non supporté sur PC")
+    print("KivMob non dispo sur PC (Normal)")
 
-# --- GÉNÉRATEUR DE SONS ---
+# --- GÉNÉRATEUR DE SONS (Sauf flap.wav qui est importé) ---
 def create_sounds():
     if not os.path.exists('score.wav'):
         with wave.open('score.wav', 'w') as f:
@@ -136,18 +138,18 @@ kv = '''
     size_hint: 1, 1
     canvas.before:
         Color:
-            rgba: 0, 0, 0, 1 # Fond noir
+            rgba: 0, 0, 0, 1 # Fond noir pour l'intro
         Rectangle:
             pos: self.pos
             size: self.size
     
-    # LOGO ANIMÉ
+    # LOGO FASO LAB
     Image:
-        source: 'logo.png' # TON IMAGE FASO LAB
+        source: 'logo.png' 
         size_hint: 0.6, 0.6
         pos_hint: {'center_x': 0.5, 'center_y': 0.5}
         id: logo_img
-        opacity: 0 # Commence invisible pour le fade in
+        opacity: 0 
 
 <FlappyGame>:
     pipe_layer: pipe_layer
@@ -199,8 +201,9 @@ kv = '''
             outline_color: 0,0,0,1
             size_hint_y: 0.4
         
+        # BOUTON CORRIGÉ (PLUS DE CARRÉ BLANC)
         Button:
-            text: "MON PROFIL & STATS" # J'ai retiré l'émoji buggé
+            text: "MON PROFIL & STATS" 
             size_hint_y: 0.15
             background_color: 0, 0.5, 1, 1
             font_size: '20sp'
@@ -332,7 +335,7 @@ kv = '''
         outline_color: 0,0,0,1
         opacity: 1 if root.started and not root.game_over else 0
 
-    # --- ECRAN INTRO (AU DESSUS DE TOUT) ---
+    # --- ECRAN INTRO (Démarrage) ---
     IntroScreen:
         id: intro_layer
         opacity: 1 if root.in_intro else 0
@@ -407,7 +410,7 @@ class FlappyGame(FloatLayout):
     total_xp = NumericProperty(0)
     
     show_stats = BooleanProperty(False)
-    in_intro = BooleanProperty(True) # COMMENCE PAR L'INTRO
+    in_intro = BooleanProperty(True) # ACTIVE L'INTRO
     
     rank_title = StringProperty("NOVICE")
     next_rank_text = StringProperty("") 
@@ -467,23 +470,19 @@ class FlappyGame(FloatLayout):
             self.total_xp = data.get('xp', 0)
         self.update_rank()
         
-        # --- LANCEMENT INTRO ---
         Clock.schedule_once(self.start_intro, 0.5)
-
         Clock.schedule_interval(self.update, 1.0/60.0)
         self.spawn_timer = 0
         Clock.schedule_once(self.init_star, 0.1)
 
     def init_ads(self):
-        # INITIALISATION PUBS
         if kivmob_available and USE_ADMOB:
             self.ads = KivMob(ADMOB_APP_ID)
-            self.ads.new_banner(ADMOB_BANNER_ID, top_pos=False) # Pub en bas
+            self.ads.new_banner(ADMOB_BANNER_ID, top_pos=False)
             self.ads.request_banner()
             self.ads.show_banner()
 
     def start_intro(self, dt):
-        # Animation: Logo apparaît doucement
         if self.intro_layer:
             logo = self.intro_layer.ids.logo_img
             anim = Animation(opacity=1, duration=1.5) + Animation(opacity=1, duration=1.0) + Animation(opacity=0, duration=0.5)
@@ -491,10 +490,9 @@ class FlappyGame(FloatLayout):
             anim.start(logo)
 
     def end_intro(self, *args):
-        self.in_intro = False # Fin intro, affiche menu
-        # On lance les pubs après l'intro
+        self.in_intro = False 
         try:
-            self.init_ads()
+            self.init_ads() # LANCE LA PUB APRES L'INTRO
         except: pass
 
     def init_star(self, dt):
@@ -533,7 +531,6 @@ class FlappyGame(FloatLayout):
     def save_data(self):
         if self.score > self.high_score:
             self.high_score = self.score
-        
         self.total_xp += self.score
         self.update_rank()
         self.store.put('stats', best=self.high_score, xp=self.total_xp)
@@ -555,7 +552,6 @@ class FlappyGame(FloatLayout):
             else: 
                 self.medal_text = "COURAGE !"
                 self.medal_color = [1, 1, 1, 1]
-            
             self.save_data()
 
     def do_flash(self):
@@ -598,7 +594,6 @@ class FlappyGame(FloatLayout):
             self.sound_flap.play()
 
         if not self.started:
-            # Check si clic bouton stats
             if touch.y < self.height * 0.7:
                 self.started = True
                 self.velocity = dp(400)
@@ -650,4 +645,31 @@ class FlappyGame(FloatLayout):
         required_time = 1.3 * (dp(240) / self.game_speed) 
         if self.spawn_timer > required_time:
             self.spawn_pipe()
-            self.
+            self.spawn_timer = 0
+            
+        for p in self.pipes[:]:
+            p.x -= self.game_speed * dt
+            if p.right < self.bird.x and not p.scored:
+                self.score += 1
+                p.scored = True
+                self.do_flash()
+                if self.sound_score:
+                    if self.sound_score.state == 'play': self.sound_score.stop()
+                    self.sound_score.play()
+            if p.right < 0:
+                self.pipe_layer.remove_widget(p)
+                self.pipes.remove(p)
+            hit_margin = dp(15) 
+            if (self.bird.right - hit_margin > p.x and self.bird.x + hit_margin < p.right):
+                if (self.bird.y + hit_margin < p.bottom_h) or (self.bird.top - hit_margin > p.top_y):
+                    self.trigger_game_over()
+        if self.bird.y < 0 or self.bird.top > self.height:
+            self.trigger_game_over()
+
+class FlappyApp(App):
+    def build(self):
+        Builder.load_string(kv)
+        return FlappyGame()
+
+if __name__ == '__main__':
+    FlappyApp().run()
