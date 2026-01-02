@@ -6,10 +6,13 @@ import os
 from kivy.config import Config
 from kivy.storage.jsonstore import JsonStore
 from kivy.animation import Animation
+from kivy.core.window import Window
 
-# --- MODE SANS ECHEC ---
-USE_ADMOB = False # On désactive les pubs pour tester
-# On désactive aussi l'intro dans le code plus bas
+# --- CONFIGURATION ---
+# Pubs activées (Codes de Test Google)
+ADMOB_APP_ID = "ca-app-pub-3940256099942544~3347511713" 
+ADMOB_BANNER_ID = "ca-app-pub-3940256099942544/6300978111" 
+USE_ADMOB = True 
 
 # Optimisation
 Config.set('graphics', 'resizable', '0')
@@ -25,9 +28,16 @@ from kivy.metrics import dp
 from kivy.graphics.texture import Texture
 from kivy.core.audio import SoundLoader
 
-# --- GÉNÉRATEUR DE SONS ---
+# TENTATIVE D'IMPORT KIVMOB (Avec sécurité anti-crash)
+kivmob_available = False
+try:
+    from kivmob import KivMob, TestIds
+    kivmob_available = True
+except:
+    print("KivMob non installé ou erreur d'import")
+
+# --- GÉNÉRATEUR DE SONS (Sauf flap.wav) ---
 def create_sounds():
-    # On recrée les sons de base pour être sûr qu'ils existent
     if not os.path.exists('score.wav'):
         with wave.open('score.wav', 'w') as f:
             f.setparams((1, 2, 44100, 0, 'NONE', 'not compressed'))
@@ -154,7 +164,7 @@ kv = '''
     Flash:
         id: flash_layer
 
-    # --- ACCUEIL (SANS INTRO) ---
+    # --- ACCUEIL (DIRECT, SANS INTRO) ---
     BoxLayout:
         orientation: 'vertical'
         size_hint: 1, 1
@@ -349,7 +359,6 @@ class Pipe(Widget):
         floor = dp(100) 
         max_h = h - floor - self.gap
         min_h = floor
-        
         if last_y is None:
             self.bottom_h = h / 2 - (self.gap / 2)
         else:
@@ -358,7 +367,6 @@ class Pipe(Widget):
             if new_h < min_h: new_h = min_h + dp(20)
             if new_h > max_h: new_h = max_h - dp(20)
             self.bottom_h = new_h
-
         self.top_y = self.bottom_h + self.gap
         self.top_h = h - self.top_y
 
@@ -371,7 +379,6 @@ class FlappyGame(FloatLayout):
     total_xp = NumericProperty(0)
     
     show_stats = BooleanProperty(False)
-    # in_intro = BooleanProperty(False) # DESACTIVÉ POUR LE TEST
     
     rank_title = StringProperty("NOVICE")
     next_rank_text = StringProperty("") 
@@ -401,6 +408,8 @@ class FlappyGame(FloatLayout):
     store = None
     last_pipe_y = NumericProperty(0)
     
+    ads = None
+    
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.generate_flag_bg()
@@ -410,7 +419,7 @@ class FlappyGame(FloatLayout):
         create_sounds()
         try:
             self.sound_score = SoundLoader.load('score.wav')
-            # ESSAYE DE CHARGER FLAP.WAV, SINON RIEN
+            # CHARGEMENT SÉCURISÉ FLAP.WAV
             if os.path.exists('flap.wav'):
                 self.sound_flap = SoundLoader.load('flap.wav') 
                 if self.sound_flap: self.sound_flap.volume = 0.4
@@ -421,8 +430,8 @@ class FlappyGame(FloatLayout):
                 self.music.loop = True
                 self.music.volume = 0.5
                 self.music.play() 
-        except: 
-            print("Erreur sons")
+        except Exception as e:
+            print("Erreur sons:", e)
 
         self.store = JsonStore('game_data.json')
         if self.store.exists('stats'):
@@ -431,9 +440,21 @@ class FlappyGame(FloatLayout):
             self.total_xp = data.get('xp', 0)
         self.update_rank()
         
+        # INITIALISATION DIRECTE DES PUBS (Pas d'intro)
+        try:
+            self.init_ads()
+        except: pass
+
         Clock.schedule_interval(self.update, 1.0/60.0)
         self.spawn_timer = 0
         Clock.schedule_once(self.init_star, 0.1)
+
+    def init_ads(self):
+        if kivmob_available and USE_ADMOB:
+            self.ads = KivMob(ADMOB_APP_ID)
+            self.ads.new_banner(ADMOB_BANNER_ID, top_pos=False)
+            self.ads.request_banner()
+            self.ads.show_banner()
 
     def init_star(self, dt):
         if self.bg_star: self.bg_star.center_x = self.width / 2
@@ -613,4 +634,4 @@ class FlappyApp(App):
 
 if __name__ == '__main__':
     FlappyApp().run()
-                
+        
