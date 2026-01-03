@@ -32,7 +32,7 @@ try:
     kivmob_available = True
 except: pass
 
-# --- GÉNÉRATEUR DE SONS ---
+# --- SONS ---
 def create_sounds():
     if not os.path.exists('score.wav'):
         with wave.open('score.wav', 'w') as f:
@@ -129,26 +129,10 @@ kv = '''
             pos: self.pos
             size: self.size
 
-<IntroScreen>:
-    size_hint: 1, 1
-    canvas.before:
-        Color:
-            rgba: 0, 0, 0, 1 
-        Rectangle:
-            pos: self.pos
-            size: self.size
-    Image:
-        source: 'logo.png' 
-        size_hint: 0.6, 0.6
-        pos_hint: {'center_x': 0.5, 'center_y': 0.5}
-        id: logo_img
-        opacity: 0 
-
 <FlappyGame>:
     pipe_layer: pipe_layer
     bird: bird
     flash_layer: flash_layer
-    intro_layer: intro_layer
     
     canvas.before:
         Color:
@@ -180,7 +164,7 @@ kv = '''
     BoxLayout:
         orientation: 'vertical'
         size_hint: 1, 1
-        visible: not root.started and not root.game_over and not root.show_stats and not root.in_intro
+        visible: not root.started and not root.game_over and not root.show_stats
         opacity: 1 if self.visible else 0
         padding: dp(20)
         spacing: dp(10)
@@ -326,18 +310,9 @@ kv = '''
         outline_width: 2
         outline_color: 0,0,0,1
         opacity: 1 if root.started and not root.game_over else 0
-
-    # INTRO
-    IntroScreen:
-        id: intro_layer
-        opacity: 1 if root.in_intro else 0
-        visible: root.in_intro
 '''
 
 class Flash(Widget):
-    pass
-
-class IntroScreen(FloatLayout):
     pass
 
 class FasoStar(Widget):
@@ -400,7 +375,6 @@ class FlappyGame(FloatLayout):
     total_xp = NumericProperty(0)
     
     show_stats = BooleanProperty(False)
-    in_intro = BooleanProperty(True) 
     
     rank_title = StringProperty("NOVICE")
     next_rank_text = StringProperty("") 
@@ -417,7 +391,6 @@ class FlappyGame(FloatLayout):
     bird = ObjectProperty(None)
     pipe_layer = ObjectProperty(None)
     flash_layer = ObjectProperty(None)
-    intro_layer = ObjectProperty(None)
     bg_texture = ObjectProperty(None)
     pipe_tex_red = ObjectProperty(None)
     pipe_tex_green = ObjectProperty(None)
@@ -441,7 +414,7 @@ class FlappyGame(FloatLayout):
         create_sounds()
         try:
             self.sound_score = SoundLoader.load('score.wav')
-            # --- VOLUME REGLE A 10% (0.1) ---
+            # VOLUME REDUIT (0.1)
             if os.path.exists('flap.wav'):
                 self.sound_flap = SoundLoader.load('flap.wav') 
                 if self.sound_flap: self.sound_flap.volume = 0.1
@@ -461,7 +434,10 @@ class FlappyGame(FloatLayout):
             self.total_xp = data.get('xp', 0)
         self.update_rank()
         
-        Clock.schedule_once(self.start_intro, 0.5)
+        try:
+            self.init_ads()
+        except: pass
+
         Clock.schedule_interval(self.update, 1.0/60.0)
         self.spawn_timer = 0
         Clock.schedule_once(self.init_star, 0.1)
@@ -472,19 +448,6 @@ class FlappyGame(FloatLayout):
             self.ads.new_banner(ADMOB_BANNER_ID, top_pos=False)
             self.ads.request_banner()
             self.ads.show_banner()
-
-    def start_intro(self, dt):
-        if self.intro_layer:
-            logo = self.intro_layer.ids.logo_img
-            anim = Animation(opacity=1, duration=1.5) + Animation(opacity=1, duration=1.0) + Animation(opacity=0, duration=0.5)
-            anim.bind(on_complete=self.end_intro)
-            anim.start(logo)
-
-    def end_intro(self, *args):
-        self.in_intro = False 
-        try:
-            self.init_ads()
-        except: pass
 
     def init_star(self, dt):
         if self.bg_star: self.bg_star.center_x = self.width / 2
@@ -573,7 +536,7 @@ class FlappyGame(FloatLayout):
         self.bg_texture = tex
 
     def on_touch_down(self, touch):
-        if self.show_stats or self.in_intro:
+        if self.show_stats:
             return super().on_touch_down(touch)
         if self.game_over:
              return super().on_touch_down(touch)
@@ -647,4 +610,16 @@ class FlappyGame(FloatLayout):
                 self.pipe_layer.remove_widget(p)
                 self.pipes.remove(p)
             hit_margin = dp(15) 
-            if (self.bird.right - hit_margin
+            if (self.bird.right - hit_margin > p.x and self.bird.x + hit_margin < p.right):
+                if (self.bird.y + hit_margin < p.bottom_h) or (self.bird.top - hit_margin > p.top_y):
+                    self.trigger_game_over()
+        if self.bird.y < 0 or self.bird.top > self.height:
+            self.trigger_game_over()
+
+class FlappyApp(App):
+    def build(self):
+        Builder.load_string(kv)
+        return FlappyGame()
+
+if __name__ == '__main__':
+    FlappyApp().run()
