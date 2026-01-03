@@ -8,7 +8,7 @@ from kivy.storage.jsonstore import JsonStore
 from kivy.animation import Animation
 from kivy.core.window import Window
 
-# --- CONFIGURATION ADMOB (Codes Test) ---
+# --- CONFIGURATION ---
 ADMOB_APP_ID = "ca-app-pub-3940256099942544~3347511713" 
 ADMOB_BANNER_ID = "ca-app-pub-3940256099942544/6300978111" 
 USE_ADMOB = True 
@@ -32,7 +32,7 @@ try:
     kivmob_available = True
 except: pass
 
-# --- SONS ---
+# --- GÉNÉRATEUR DE SONS ---
 def create_sounds():
     if not os.path.exists('score.wav'):
         with wave.open('score.wav', 'w') as f:
@@ -129,16 +129,14 @@ kv = '''
             pos: self.pos
             size: self.size
 
-# --- ECRAN INTRO ---
 <IntroScreen>:
     size_hint: 1, 1
     canvas.before:
         Color:
-            rgba: 0, 0, 0, 1 # Fond Noir
+            rgba: 0, 0, 0, 1 
         Rectangle:
             pos: self.pos
             size: self.size
-    
     Image:
         source: 'logo.png' 
         size_hint: 0.6, 0.6
@@ -402,7 +400,7 @@ class FlappyGame(FloatLayout):
     total_xp = NumericProperty(0)
     
     show_stats = BooleanProperty(False)
-    in_intro = BooleanProperty(True) # INTRO ACTIVÉE
+    in_intro = BooleanProperty(True) 
     
     rank_title = StringProperty("NOVICE")
     next_rank_text = StringProperty("") 
@@ -443,9 +441,11 @@ class FlappyGame(FloatLayout):
         create_sounds()
         try:
             self.sound_score = SoundLoader.load('score.wav')
+            # --- VOLUME REGLE A 10% (0.1) ---
             if os.path.exists('flap.wav'):
                 self.sound_flap = SoundLoader.load('flap.wav') 
-                if self.sound_flap: self.sound_flap.volume = 0.4
+                if self.sound_flap: self.sound_flap.volume = 0.1
+            
             self.sound_crash = SoundLoader.load('crash.wav')
             self.music = SoundLoader.load('music.wav')
             if self.music: 
@@ -647,4 +647,4 @@ class FlappyGame(FloatLayout):
                 self.pipe_layer.remove_widget(p)
                 self.pipes.remove(p)
             hit_margin = dp(15) 
-            if (self.bird.right - hit_margin >
+            if (self.bird.right - hit_margin
