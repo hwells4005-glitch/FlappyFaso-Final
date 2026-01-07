@@ -1,12 +1,18 @@
 import random
 import math
-import struct
-import wave
 import os
 from kivy.config import Config
 from kivy.storage.jsonstore import JsonStore
 from kivy.animation import Animation
 from kivy.core.window import Window
+from kivy.app import App
+from kivy.uix.floatlayout import FloatLayout
+from kivy.uix.widget import Widget
+from kivy.clock import Clock
+from kivy.lang import Builder
+from kivy.properties import NumericProperty, ListProperty, BooleanProperty, ObjectProperty, StringProperty
+from kivy.metrics import dp
+from kivy.graphics.texture import Texture
 
 # --- CONFIGURATION ---
 ADMOB_APP_ID = "ca-app-pub-3940256099942544~3347511713" 
@@ -16,56 +22,11 @@ USE_ADMOB = True
 Config.set('graphics', 'resizable', '0')
 Config.set('kivy', 'exit_on_escape', '1')
 
-from kivy.app import App
-from kivy.uix.floatlayout import FloatLayout
-from kivy.uix.widget import Widget
-from kivy.clock import Clock
-from kivy.lang import Builder
-from kivy.properties import NumericProperty, ListProperty, BooleanProperty, ObjectProperty, StringProperty, ListProperty
-from kivy.metrics import dp
-from kivy.graphics.texture import Texture
-from kivy.core.audio import SoundLoader
-
 kivmob_available = False
 try:
     from kivmob import KivMob, TestIds
     kivmob_available = True
 except: pass
-
-# --- SONS ---
-def create_sounds():
-    if not os.path.exists('score.wav'):
-        with wave.open('score.wav', 'w') as f:
-            f.setparams((1, 2, 44100, 0, 'NONE', 'not compressed'))
-            data = []
-            for i in range(int(44100 * 0.1)):
-                vol = 0.5 * (1 - (i / (44100 * 0.1)))
-                v = math.sin(2 * math.pi * 1500 * (i / 44100.0)) * vol
-                data.append(struct.pack('h', int(v * 32767)))
-            f.writeframes(b''.join(data))
-
-    if not os.path.exists('crash.wav'):
-        with wave.open('crash.wav', 'w') as f:
-            f.setparams((1, 2, 44100, 0, 'NONE', 'not compressed'))
-            data = []
-            for i in range(int(44100 * 0.3)):
-                vol = 0.8 * (1 - (i / (44100 * 0.3)))
-                noise = (random.random() * 2 - 1) * vol
-                data.append(struct.pack('h', int(noise * 32767)))
-            f.writeframes(b''.join(data))
-
-    if not os.path.exists('music.wav'):
-        with wave.open('music.wav', 'w') as f:
-            f.setparams((1, 2, 44100, 0, 'NONE', 'not compressed'))
-            data = []
-            tempo = 44100 * 0.5 
-            total_len = int(44100 * 2.0)
-            for i in range(total_len):
-                val = 0
-                if (i % int(tempo)) < 2000:
-                    val = 0.3 * math.sin(2 * math.pi * 100 * (i/44100.0))
-                data.append(struct.pack('h', int(val * 32767)))
-            f.writeframes(b''.join(data))
 
 kv = '''
 #:import dp kivy.metrics.dp
@@ -101,10 +62,10 @@ kv = '''
             rectangle: (self.x, self.y, self.width, self.bottom_h)
             width: 1
 
-# --- ICI : ON REMET TON IMAGE D'OISEAU ---
+# --- OISEAU DESSINÉ EN CODE (Pour éviter le crash image) ---
 <Bird>:
     size_hint: None, None
-    size: dp(70), dp(70)
+    size: dp(50), dp(50)
     canvas.before:
         PushMatrix
         Rotate:
@@ -112,11 +73,15 @@ kv = '''
             origin: self.center
     canvas:
         Color:
-            rgba: 1, 1, 1, 1
+            rgba: 1, 1, 0, 1 # JAUNE
         Rectangle:
             pos: self.pos
             size: self.size
-            source: 'bird.png' 
+        Color:
+            rgba: 0, 0, 0, 1 # CONTOUR NOIR
+        Line:
+            rectangle: (self.x, self.y, self.width, self.height)
+            width: 1.5
     canvas.after:
         PopMatrix
 
@@ -155,7 +120,6 @@ kv = '''
     canvas.before:
         Color:
             rgba: 1, 1, 1, 1
-        # FOND DRAPEAU GENERE PAR CODE
         Rectangle:
             pos: self.pos
             size: self.size
@@ -426,11 +390,6 @@ class FlappyGame(FloatLayout):
     pipe_tex_green = ObjectProperty(None)
     bg_star = ObjectProperty(None)
     
-    sound_score = ObjectProperty(None)
-    sound_flap = ObjectProperty(None)
-    sound_crash = ObjectProperty(None)
-    music = ObjectProperty(None)
-    
     store = None
     last_pipe_y = NumericProperty(0)
     ads = None
@@ -441,20 +400,9 @@ class FlappyGame(FloatLayout):
         self.pipe_tex_red = self.gen_3d_pipe_tex((239, 43, 45))
         self.pipe_tex_green = self.gen_3d_pipe_tex((0, 158, 73))
         
-        create_sounds()
-        try:
-            self.sound_score = SoundLoader.load('score.wav')
-            if os.path.exists('flap.wav'):
-                self.sound_flap = SoundLoader.load('flap.wav') 
-                if self.sound_flap: self.sound_flap.volume = 0.1
-            self.sound_crash = SoundLoader.load('crash.wav')
-            self.music = SoundLoader.load('music.wav')
-            if self.music: 
-                self.music.loop = True
-                self.music.volume = 0.5
-                self.music.play() 
-        except: pass
-
+        # --- SONS DESACTIVES POUR CE TEST (On évite le crash fichier) ---
+        # Si ça marche, on les remettra
+        
         self.store = JsonStore('game_data.json')
         if self.store.exists('stats'):
             data = self.store.get('stats')
@@ -533,8 +481,6 @@ class FlappyGame(FloatLayout):
     def trigger_game_over(self):
         if not self.game_over:
             self.game_over = True
-            if self.sound_crash: self.sound_crash.play()
-            
             if self.score >= 50: 
                 self.medal_text = "MEDAILLE D'OR"
                 self.medal_color = [1, 0.84, 0, 1]
@@ -582,9 +528,9 @@ class FlappyGame(FloatLayout):
             return super().on_touch_down(touch)
         if self.game_over:
              return super().on_touch_down(touch)
-        if self.sound_flap:
-            if self.sound_flap.state == 'play': self.sound_flap.stop()
-            self.sound_flap.play()
+        
+        # PAS DE SON ICI (TEST)
+        
         if not self.started:
             if touch.y < self.height * 0.7:
                 self.started = True
@@ -645,10 +591,22 @@ class FlappyGame(FloatLayout):
                 self.score += 1
                 p.scored = True
                 self.do_flash()
-                if self.sound_score:
-                    if self.sound_score.state == 'play': self.sound_score.stop()
-                    self.sound_score.play()
+                # PAS DE SON ICI
             if p.right < 0:
                 self.pipe_layer.remove_widget(p)
                 self.pipes.remove(p)
-            hit_ma
+            hit_margin = dp(15) 
+            if (self.bird.right - hit_margin > p.x and self.bird.x + hit_margin < p.right):
+                if (self.bird.y + hit_margin < p.bottom_h) or (self.bird.top - hit_margin > p.top_y):
+                    self.trigger_game_over()
+        if self.bird.y < 0 or self.bird.top > self.height:
+            self.trigger_game_over()
+
+class FlappyApp(App):
+    def build(self):
+        Builder.load_string(kv)
+        return FlappyGame()
+
+if __name__ == '__main__':
+    FlappyApp().run()
+
