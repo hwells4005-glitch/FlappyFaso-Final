@@ -70,11 +70,10 @@ def create_sounds():
 kv = '''
 #:import dp kivy.metrics.dp
 
-# L'ETOILE DU BURKINA (Dessinée en code)
 <FasoStar>:
     canvas:
         Color:
-            rgba: 1, 0.84, 0, 1 # JAUNE OR
+            rgba: 1, 0.84, 0, 1 
         Mesh:
             mode: 'triangle_fan'
             vertices: self.vertices
@@ -102,6 +101,7 @@ kv = '''
             rectangle: (self.x, self.y, self.width, self.bottom_h)
             width: 1
 
+# --- ICI : ON REMET TON IMAGE D'OISEAU ---
 <Bird>:
     size_hint: None, None
     size: dp(70), dp(70)
@@ -130,7 +130,6 @@ kv = '''
             pos: self.pos
             size: self.size
 
-# --- ACCUEIL ---
 <IntroScreen>:
     size_hint: 1, 1
     canvas.before:
@@ -139,7 +138,6 @@ kv = '''
         Rectangle:
             pos: self.pos
             size: self.size
-    # Pas de logo ici pour éviter les crashs si image manquante
     Label:
         text: "FASO LAB"
         font_size: '40sp'
@@ -157,13 +155,12 @@ kv = '''
     canvas.before:
         Color:
             rgba: 1, 1, 1, 1
-        # LE FOND GENERE PAR LE CODE (Drapeau)
+        # FOND DRAPEAU GENERE PAR CODE
         Rectangle:
             pos: self.pos
             size: self.size
             texture: self.bg_texture
     
-    # L'ETOILE CENTRALE
     FasoStar:
         id: bg_star
         size_hint: None, None
@@ -182,7 +179,7 @@ kv = '''
     Flash:
         id: flash_layer
 
-    # --- MENU PRINCIPAL ---
+    # --- MENU ---
     BoxLayout:
         orientation: 'vertical'
         size_hint: 1, 1
@@ -216,7 +213,7 @@ kv = '''
             outline_width: 1
             outline_color: 0,0,0,1
 
-    # --- ECRAN STATS ---
+    # --- STATS ---
     BoxLayout:
         orientation: 'vertical'
         size_hint: 0.9, 0.7
@@ -440,10 +437,7 @@ class FlappyGame(FloatLayout):
     
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        
-        # --- C'EST ICI QU'ON CODE LA COULEUR DU DRAPEAU ---
-        self.generate_flag_bg() 
-        
+        self.generate_flag_bg()
         self.pipe_tex_red = self.gen_3d_pipe_tex((239, 43, 45))
         self.pipe_tex_green = self.gen_3d_pipe_tex((0, 158, 73))
         
@@ -573,14 +567,10 @@ class FlappyGame(FloatLayout):
         tex.mag_filter = 'nearest' 
         return tex
 
-    # --- LE GENERATEUR DE DRAPEAU EN CODE ---
     def generate_flag_bg(self):
         tex = Texture.create(size=(1, 64), colorfmt='rgb')
         buf = []
         for i in range(64):
-            # i < 32 = Partie Basse = VERT (0, 158, 73)
-            # i >= 32 = Partie Haute = ROUGE (239, 43, 45)
-            # TU PEUX CHANGER LES CHIFFRES ICI POUR CHANGER LA COULEUR
             if i < 32: buf.extend([0, 158, 73])
             else: buf.extend([239, 43, 45])
         tex.blit_buffer(bytes(buf), colorfmt='rgb', bufferfmt='ubyte')
@@ -650,4 +640,15 @@ class FlappyGame(FloatLayout):
             self.spawn_timer = 0
             
         for p in self.pipes[:]:
-            p.x -= self.game_speed 
+            p.x -= self.game_speed * dt
+            if p.right < self.bird.x and not p.scored:
+                self.score += 1
+                p.scored = True
+                self.do_flash()
+                if self.sound_score:
+                    if self.sound_score.state == 'play': self.sound_score.stop()
+                    self.sound_score.play()
+            if p.right < 0:
+                self.pipe_layer.remove_widget(p)
+                self.pipes.remove(p)
+            hit_ma
