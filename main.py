@@ -70,10 +70,11 @@ def create_sounds():
 kv = '''
 #:import dp kivy.metrics.dp
 
+# L'ETOILE DU BURKINA (Dessinée en code)
 <FasoStar>:
     canvas:
         Color:
-            rgba: 1, 0.84, 0, 1 
+            rgba: 1, 0.84, 0, 1 # JAUNE OR
         Mesh:
             mode: 'triangle_fan'
             vertices: self.vertices
@@ -129,19 +130,40 @@ kv = '''
             pos: self.pos
             size: self.size
 
+# --- ACCUEIL ---
+<IntroScreen>:
+    size_hint: 1, 1
+    canvas.before:
+        Color:
+            rgba: 0, 0, 0, 1 
+        Rectangle:
+            pos: self.pos
+            size: self.size
+    # Pas de logo ici pour éviter les crashs si image manquante
+    Label:
+        text: "FASO LAB"
+        font_size: '40sp'
+        bold: True
+        color: 0, 1, 0, 1
+        opacity: 0
+        id: logo_lbl
+
 <FlappyGame>:
     pipe_layer: pipe_layer
     bird: bird
     flash_layer: flash_layer
+    intro_layer: intro_layer
     
     canvas.before:
         Color:
             rgba: 1, 1, 1, 1
+        # LE FOND GENERE PAR LE CODE (Drapeau)
         Rectangle:
             pos: self.pos
             size: self.size
             texture: self.bg_texture
     
+    # L'ETOILE CENTRALE
     FasoStar:
         id: bg_star
         size_hint: None, None
@@ -160,11 +182,11 @@ kv = '''
     Flash:
         id: flash_layer
 
-    # --- ACCUEIL ---
+    # --- MENU PRINCIPAL ---
     BoxLayout:
         orientation: 'vertical'
         size_hint: 1, 1
-        visible: not root.started and not root.game_over and not root.show_stats
+        visible: not root.started and not root.game_over and not root.show_stats and not root.in_intro
         opacity: 1 if self.visible else 0
         padding: dp(20)
         spacing: dp(10)
@@ -194,7 +216,7 @@ kv = '''
             outline_width: 1
             outline_color: 0,0,0,1
 
-    # --- STATS ---
+    # --- ECRAN STATS ---
     BoxLayout:
         orientation: 'vertical'
         size_hint: 0.9, 0.7
@@ -310,9 +332,18 @@ kv = '''
         outline_width: 2
         outline_color: 0,0,0,1
         opacity: 1 if root.started and not root.game_over else 0
+    
+    # INTRO
+    IntroScreen:
+        id: intro_layer
+        opacity: 1 if root.in_intro else 0
+        visible: root.in_intro
 '''
 
 class Flash(Widget):
+    pass
+
+class IntroScreen(FloatLayout):
     pass
 
 class FasoStar(Widget):
@@ -375,6 +406,7 @@ class FlappyGame(FloatLayout):
     total_xp = NumericProperty(0)
     
     show_stats = BooleanProperty(False)
+    in_intro = BooleanProperty(True) 
     
     rank_title = StringProperty("NOVICE")
     next_rank_text = StringProperty("") 
@@ -391,6 +423,7 @@ class FlappyGame(FloatLayout):
     bird = ObjectProperty(None)
     pipe_layer = ObjectProperty(None)
     flash_layer = ObjectProperty(None)
+    intro_layer = ObjectProperty(None)
     bg_texture = ObjectProperty(None)
     pipe_tex_red = ObjectProperty(None)
     pipe_tex_green = ObjectProperty(None)
@@ -407,18 +440,19 @@ class FlappyGame(FloatLayout):
     
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.generate_flag_bg()
+        
+        # --- C'EST ICI QU'ON CODE LA COULEUR DU DRAPEAU ---
+        self.generate_flag_bg() 
+        
         self.pipe_tex_red = self.gen_3d_pipe_tex((239, 43, 45))
         self.pipe_tex_green = self.gen_3d_pipe_tex((0, 158, 73))
         
         create_sounds()
         try:
             self.sound_score = SoundLoader.load('score.wav')
-            # VOLUME REDUIT (0.1)
             if os.path.exists('flap.wav'):
                 self.sound_flap = SoundLoader.load('flap.wav') 
                 if self.sound_flap: self.sound_flap.volume = 0.1
-            
             self.sound_crash = SoundLoader.load('crash.wav')
             self.music = SoundLoader.load('music.wav')
             if self.music: 
@@ -438,6 +472,7 @@ class FlappyGame(FloatLayout):
             self.init_ads()
         except: pass
 
+        Clock.schedule_once(self.start_intro, 0.5)
         Clock.schedule_interval(self.update, 1.0/60.0)
         self.spawn_timer = 0
         Clock.schedule_once(self.init_star, 0.1)
@@ -448,6 +483,19 @@ class FlappyGame(FloatLayout):
             self.ads.new_banner(ADMOB_BANNER_ID, top_pos=False)
             self.ads.request_banner()
             self.ads.show_banner()
+
+    def start_intro(self, dt):
+        if self.intro_layer:
+            logo = self.intro_layer.ids.logo_lbl
+            anim = Animation(opacity=1, duration=1.5) + Animation(opacity=1, duration=1.0) + Animation(opacity=0, duration=0.5)
+            anim.bind(on_complete=self.end_intro)
+            anim.start(logo)
+
+    def end_intro(self, *args):
+        self.in_intro = False 
+        try:
+            self.init_ads()
+        except: pass
 
     def init_star(self, dt):
         if self.bg_star: self.bg_star.center_x = self.width / 2
@@ -525,10 +573,14 @@ class FlappyGame(FloatLayout):
         tex.mag_filter = 'nearest' 
         return tex
 
+    # --- LE GENERATEUR DE DRAPEAU EN CODE ---
     def generate_flag_bg(self):
         tex = Texture.create(size=(1, 64), colorfmt='rgb')
         buf = []
         for i in range(64):
+            # i < 32 = Partie Basse = VERT (0, 158, 73)
+            # i >= 32 = Partie Haute = ROUGE (239, 43, 45)
+            # TU PEUX CHANGER LES CHIFFRES ICI POUR CHANGER LA COULEUR
             if i < 32: buf.extend([0, 158, 73])
             else: buf.extend([239, 43, 45])
         tex.blit_buffer(bytes(buf), colorfmt='rgb', bufferfmt='ubyte')
@@ -536,7 +588,7 @@ class FlappyGame(FloatLayout):
         self.bg_texture = tex
 
     def on_touch_down(self, touch):
-        if self.show_stats:
+        if self.show_stats or self.in_intro:
             return super().on_touch_down(touch)
         if self.game_over:
              return super().on_touch_down(touch)
@@ -598,28 +650,4 @@ class FlappyGame(FloatLayout):
             self.spawn_timer = 0
             
         for p in self.pipes[:]:
-            p.x -= self.game_speed * dt
-            if p.right < self.bird.x and not p.scored:
-                self.score += 1
-                p.scored = True
-                self.do_flash()
-                if self.sound_score:
-                    if self.sound_score.state == 'play': self.sound_score.stop()
-                    self.sound_score.play()
-            if p.right < 0:
-                self.pipe_layer.remove_widget(p)
-                self.pipes.remove(p)
-            hit_margin = dp(15) 
-            if (self.bird.right - hit_margin > p.x and self.bird.x + hit_margin < p.right):
-                if (self.bird.y + hit_margin < p.bottom_h) or (self.bird.top - hit_margin > p.top_y):
-                    self.trigger_game_over()
-        if self.bird.y < 0 or self.bird.top > self.height:
-            self.trigger_game_over()
-
-class FlappyApp(App):
-    def build(self):
-        Builder.load_string(kv)
-        return FlappyGame()
-
-if __name__ == '__main__':
-    FlappyApp().run()
+            p.x -= self.game_speed 
