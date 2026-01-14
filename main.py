@@ -1,4 +1,3 @@
-
 ## **4. Code principal optimisé (`main.py`)**
 
 ```python
