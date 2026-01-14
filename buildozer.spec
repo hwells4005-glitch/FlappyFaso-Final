@@ -1,39 +1,101 @@
 [app]
+
+# Titre de l'application
 title = Flappy Faso
+
+# Nom du package
 package.name = flappyfaso
-package.domain = org.faso
+
+# Domaine du package
+package.domain = com.fasolab
+
+# Version du code source
+version = 1.0.0
+
+# Numéro de version
+version.code = 1
+
+# Auteur
+author = Faso Lab
+
+# Chemin du code source
 source.dir = .
-source.include_exts = py,png,jpg,kv,atlas,wav
-version = 1.0
 
-# KIVMOB POUR LES PUBS
-requirements = python3,kivy==2.2.0,android,kivmob
+# Point d'entrée principal
+source.include_exts = py,png,jpg,kv,atlas,ttf,wav,mp3,json
 
-# --- CONFIG IMAGES ---
-# ✅ ON GARDE L'ICONE (Il faut le fichier icon.png sur GitHub !)
-icon.filename = icon.png
+# Application principale
+main = main.py
 
-# ❌ ON ENLEVE LE PRESPLASH (Pour éviter les erreurs si manquant)
-# presplash.filename = presplash.png
+# Version de Python
+python.version = 3.9
 
-orientation = portrait
-fullscreen = 0
-android.permissions = INTERNET, ACCESS_NETWORK_STATE
-android.api = 33
+# Version de Android SDK
+android.sdk = 28
+android.ndk = 23b
+android.ndk_api = 21
+
+# Permissions Android
+android.permissions = INTERNET,ACCESS_NETWORK_STATE
+
+# Caractéristiques
+android.features = android.hardware.screen.portrait
+
+# API minimum
 android.minapi = 21
 
-# --- FIX OBLIGATOIRE (POUR CORRIGER L'ERREUR AIDL DE TES LOGS) ---
-android.build_tools_version = 34.0.0
-android.accept_sdk_license = True
+# API cible
+android.targetapi = 33
 
-# FIX ADMOB (CRUCIAL POUR NE PAS CRASHER)
+# Orientation
+orientation = portrait
+
+# Plein écran
+fullscreen = 1
+
+# Prévention du sommeil
+wake_lock = 1
+
+# Accélération matérielle
+android.accelerometer = 1
+
+# Rendu
+graphics = opengl
+
+# Rétention de données
+android.preserve_paths = assets/%,data/%
+
+# Bibliothèques requises
+requirements = python3,kivy==2.3.0,kivymd,kivmob,Pillow
+
+# Bibliothèques Android
+android.gradle_dependencies = com.google.android.gms:play-services-ads:22.0.0
+
+# Services Google
 android.meta_data = com.google.android.gms.ads.APPLICATION_ID=ca-app-pub-3940256099942544~3347511713
-android.gradle_dependencies = com.google.android.gms:play-services-ads:23.0.0
 
-android.archs = arm64-v8a, armeabi-v7a
-android.allow_backup = True
-p4a.branch = master
+# Buildozer
+p4a.branch = develop
+
+# Log level
+log_level = 2
+
+# Icones
+icon.fg.png = assets/icon.png
+icon.fg.color = white
+
+# Lancement d'images
+presplash.fg.png = assets/presplash.png
+presplash.fg.color = white
+
+# Build
+build = debug
+
+# Architecture
+android.arch = arm64-v8a,armeabi-v7a
 
 [buildozer]
+
+# Configuration de log
 log_level = 2
 warn_on_root = 1
