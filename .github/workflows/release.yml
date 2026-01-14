@@ -1,0 +1,41 @@
+name: Release Management
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  create-release:
+    name: Création de Release
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout du code
+      uses: actions/checkout@v4
+      
+    - name: Build pour release
+      run: |
+        echo "🏗️  Préparation de la release..."
+        python -m pip install -r requirements.txt
+        
+    - name: Création de la release GitHub
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: ${{ github.ref }}
+        release_name: Release ${{ github.ref }}
+        generate_release_notes: true
+        
+    - name: Upload APK
+      run: |
+        # Ici vous téléchargeriez l'APK depuis les artefacts
+        echo "APK téléchargé pour release"
+        
+    - name: Notification de release
+      run: |
+        echo "🎉 Nouvelle release créée: ${{ github.ref }}"
+        
+    - name: Deploy to Test Platforms
+      run: |
+        echo "Déploiement vers Firebase App Distribution ou autres"
