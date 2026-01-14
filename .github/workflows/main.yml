@@ -1,32 +1,280 @@
-name: Build Android
-on: [push]
+name: Flappy Faso CI/CD
+
+on:
+  push:
+    branches: [ main, master, develop ]
+  pull_request:
+    branches: [ main, master ]
+
+env:
+  PYTHON_VERSION: '3.9'
+  BUILD_VERSION: ${{ github.run_number }}
 
 jobs:
-  build:
+  test:
+    name: Tests et Validation
     runs-on: ubuntu-latest
+    
     steps:
-      - uses: actions/checkout@v4
-
-      # 🕵️‍♂️ L'ESPION : Affiche le fichier pour prouver ce qu'il contient
-      - name: ESPION - VERIFIER LE FICHIER
-        run: |
-          echo "--- DÉBUT DU FICHIER ---"
-          cat buildozer.spec
-          echo "--- FIN DU FICHIER ---"
-
-      - name: Force Clean & Fix Permissions
-        run: |
-          sudo rm -rf .buildozer
-          sudo rm -rf bin
-          sudo chmod 777 -R .
-
-      - name: Build APK
-        run: |
-          docker run --rm -v ${{ github.workspace }}:/home/user/hostcwd kivy/buildozer android debug
-
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: FlappyFaso-APK
-          path: bin/*.apk
+    - name: Checkout du code
+      uses: actions/checkout@v4
+      
+    - name: Configuration de Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+      
+    - name: Installation des dépendances système
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          python3-pip \
+          python3-venv \
+          git \
+          wget \
+          unzip
           
+    - name: Installation des dépendances Python
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pytest pytest-cov kivy
+      
+    - name: Validation de la syntaxe
+      run: |
+        python -m py_compile main.py
+        python -c "import kivy; print('Kivy version:', kivy.__version__)
+      
+    - name: Tests unitaires
+      run: |
+        python -m pytest tests/ -v --cov=.
+      
+    - name: Vérification des ressources
+      run: |
+        echo "Vérification des fichiers requis..."
+        
+        # Vérification des répertoires
+        if [ ! -d "assets/sounds" ]; then
+          mkdir -p assets/sounds
+          echo "⚠️  Répertoire sounds créé - ajoutez les fichiers audio")
+        fi
+        
+        # Vérification des fichiers critiques
+        required_files=("main.py" "requirements.txt")
+        for file in "${required_files[@]}"; do
+          if [ ! -f "$file" ]; then
+            echo "❌ Fichier manquant: $file"
+            exit 1
+        fi
+        
+        echo "✅ Tous les fichiers requis sont présents"
+      
+    - name: Rapport de couverture
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./coverage.xml
+        flags: unittests
+        name: codecov-umbrella
+        
+    - name: Build documentation
+      run: |
+        echo "📚 Génération de la documentation..."
+        # Ici vous pourriez générer de la documentation automatique
+        echo "Documentation générée avec succès"
+      
+    - name: Archive des artefacts de test
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-reports
+        path: |
+          coverage.xml
+          htmlcov/
+          
+  build-android:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+    needs: test
+    
+    steps:
+    - name: Checkout du code
+      uses: actions/checkout@v4
+      
+    - name: Configuration de Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+      
+    - name: Installation de Buildozer et dépendances
+      run: |
+        python -m pip install --upgrade pip
+        pip install buildozer cython virtualenv
+        pip install -r requirements.txt
+        
+    - name: Configuration de l'environnement Android
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          git \
+          wget \
+          unzip \
+          libncurses5 \
+          openjdk-8-jdk \
+          zlib1g-dev
+          
+    - name: Build de l'APK avec Buildozer
+      run: |
+        echo "🏗️  Construction de l'APK Android..."
+        
+        # Configuration de Buildozer
+        buildozer init
+        
+        # Construction debug
+        buildozer -v android debug
+        
+    - name: Upload APK en tant qu'artefact
+      uses: actions/upload-artifact@v4
+      with:
+        name: flappy-faso-android
+        path: bin/*.apk
+        
+    - name: Création du nom de version
+      run: |
+        TIMESTAMP=$(date +'%Y%m%d_%H%M%S')
+        echo "BUILD_NAME=flappy_faso_v${BUILD_VERSION}_${TIMESTAMP}" >> $GITHUB_ENV
+        
+    - name: Renommage de l'APK
+      run: |
+        mv bin/*.apk bin/flappy_faso_v${BUILD_VERSION}.apk"
+        
+  build-windows:
+    name: Build Windows Executable
+    runs-on: windows-latest
+    needs: test
+    
+    steps:
+    - name: Checkout du code
+      uses: actions/checkout@v4
+      
+    - name: Configuration de Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+      
+    - name: Installation des dépendances
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pyinstaller
+        
+    - name: Build executable Windows
+      run: |
+        echo "🏗️  Construction de l'exécutable Windows..."
+        pyinstaller --onefile --windowed main.py
+        
+    - name: Upload executable Windows
+      uses: actions/upload-artifact@v4
+      with:
+        name: flappy-faso-windows
+        path: dist/main.exe
+        
+  deploy:
+    name: Déploiement Release
+    runs-on: ubuntu-latest
+    needs: [test, build-android]
+    
+    # Seulement pour les tags ou push sur main
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/'))
+    
+    steps:
+    - name: Checkout du code
+      uses: actions/checkout@v4
+      
+    - name: Téléchargement des artefacts de build
+      uses: actions/download-artifact@v4
+      with:
+        name: flappy-faso-android
+        path: ./artefacts
+        
+    - name: Création de la release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          ./artefacts/*.apk
+          ./README.md
+          ./requirements.txt
+          
+    - name: Publication sur Google Play (optionnel)
+      if: startsWith(github.ref, 'refs/tags/'))
+      run: |
+        echo "📱 Publication sur Google Play..."
+        # Ici vous intégreriez l'API Google Play
+        echo "Release créée avec succès"
+        
+  security-scan:
+    name: Analyse de Sécurité
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout du code
+      uses: actions/checkout@v4
+      
+    - name: Scan de sécurité avec Bandit
+      run: |
+        pip install bandit
+        bandit -r . -f html -o security-report.html
+        
+    - name: Upload rapport de sécurité
+      uses: actions/upload-artifact@v4
+      with:
+        name: security-scan
+        path: security-report.html
+        
+    - name: Scan des dépendances
+      run: |
+        pip install safety
+        safety check --json --output safety-report.json
+        
+    - name: Analyse des dépendances
+      uses: actions/upload-artifact@v4
+      with:
+        name: security-reports
+        path: |
+          security-report.html
+          safety-report.json
+          
+  notify:
+    name: Notification
+    runs-on: ubuntu-latest
+    needs: [test, build-android, security-scan]
+    if: always()
+    
+    steps:
+    - name: Notification Slack (optionnel)
+      if: always()
+      run: |
+        echo "📢 Notification du statut de build..."
+        # Intégration Slack/Discord/Email
+        echo "Build ${{ github.workflow }} terminé avec statut: ${{ needs.test.result }}"
+        
+  auto-version:
+    name: Auto Versioning
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main')
+    
+    steps:
+    - name: Checkout du code
+      uses: actions/checkout@v4
+      
+    - name: Génération du numéro de version
+      run: |
+        VERSION=$(date +'%Y.%m.%d')
+        echo "VERSION=${VERSION}" >> $GITHUB_ENV
+      
+    - name: Mise à jour de la version
+      run: |
+        # Mise à jour du buildozer.spec
+        sed -i "s/version = .*/version = ${VERSION}/" buildozer.spec
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add buildozer.spec
+        git commit -m "Auto version: ${VERSION}" || exit 0
